@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>Ping</string>
+    <key>CFBundleDisplayName</key>
+    <string>Ping</string>
+    <key>CFBundleIdentifier</key>
+    <string>zip.tanner.ping</string>
+    <!-- Placeholders. `make app` stamps both from git: the version from the tag, the build from
+         the commit count. A bundle assembled outside a checkout keeps these and says, correctly,
+         that it is no release. -->
+    <key>CFBundleVersion</key>
+    <string>0</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.0.0</string>
+    <key>CFBundleExecutable</key>
+    <string>Ping</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>26.0</string>
+    <key>CFBundleIconName</key>
+    <string>Ping</string>
+    <key>LSUIElement</key>
+    <true/>
+</dict>
+</plist>

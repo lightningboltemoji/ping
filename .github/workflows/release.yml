@@ -1,0 +1,217 @@
+# Two channels, one pipeline; both run the tests first.
+#
+#   push to main    →  the `tip` prerelease: a rolling build at a fixed asset name, so its download
+#                      URL never changes.
+#   push a `v*` tag →  that version, once. A human decides when; CI builds what the tag says.
+#
+# The tag is the version and nothing in the tree carries a number — see the Makefile's Version
+# section, which is where `make print-version` and the Info.plist stamping come from.
+name: release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Never cancel: a half-published release is worse than a queued one.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-26
+    # Every credential the job needs lives here, and the ref that may reach them is `main` or a `v*`
+    # tag — a workflow run that is not one of the two channels cannot deploy at all.
+    environment: production
+    env:
+      GH_TOKEN: ${{ github.token }}
+      # Read once here so the signing steps can gate on `env.X != ''`. Absent, the build still
+      # publishes — ad-hoc signed and not notarized.
+      MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+      # `github.token` is scoped to this repository and cannot push to the tap; the app that can is
+      # gated on the same rule as signing.
+      TAP_APP_CLIENT_ID: ${{ secrets.TAP_APP_CLIENT_ID }}
+
+    steps:
+      # Full history and tags: `git describe` is the version, and a shallow clone has no tags to
+      # describe against.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # Everything that can reject this build happens before anything expensive.
+      - name: Guard the tag
+        if: github.ref_type == 'tag'
+        run: |
+          set -euo pipefail
+          case "$GITHUB_REF_NAME" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "::error::$GITHUB_REF_NAME is not vMAJOR.MINOR.PATCH"; exit 1 ;;
+          esac
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "::error::$GITHUB_REF_NAME is already released. A version is published once — cut a new tag."
+            exit 1
+          fi
+          git fetch --no-tags --quiet origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_REF_NAME is not on main. Push the commit, then tag it."
+            exit 1
+          fi
+
+      - name: Version and channel
+        run: |
+          set -euo pipefail
+          version="$(make print-version)"
+          echo "PING_VERSION=$version" >> "$GITHUB_ENV"
+          # tip's name is fixed so /releases/download/tip/Ping-tip.zip is a permalink.
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            echo "ZIP_NAME=Ping-$version.zip" >> "$GITHUB_ENV"
+          else
+            echo "ZIP_NAME=Ping-tip.zip" >> "$GITHUB_ENV"
+          fi
+          echo "building $version"
+
+      - name: Test
+        run: make test
+
+      - name: Import the Developer ID certificate
+        if: env.MACOS_CERTIFICATE != ''
+        run: |
+          set -euo pipefail
+          keychain="$RUNNER_TEMP/ping-signing.keychain-db"
+          password="$(uuidgen)"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          printf '%s' "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security import "$RUNNER_TEMP/certificate.p12" -k "$keychain" \
+            -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain"
+          security list-keychains -d user -s "$keychain" login.keychain-db
+          rm -f "$RUNNER_TEMP/certificate.p12"
+
+      # `${VAR:--}` is "$VAR, or `-` if it is unset or empty" — i.e. fall back to ad-hoc.
+      - name: Build the bundle
+        run: make app CODESIGN_IDENTITY="${MACOS_SIGNING_IDENTITY:--}"
+
+      - name: Archive
+        run: make zip
+
+      # Notarization needs the archive, and stapling writes the ticket back into the bundle — so the
+      # archive is made twice, and the second one is what ships.
+      - name: Notarize
+        if: env.MACOS_CERTIFICATE != '' && env.APPLE_ID != ''
+        run: |
+          set -euo pipefail
+          xcrun notarytool submit "dist/$ZIP_NAME" \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" \
+            --wait
+          xcrun stapler staple Ping.app
+          make zip
+
+      - name: Verify what we are about to publish
+        run: |
+          set -euo pipefail
+          codesign --verify --deep --strict --verbose=2 Ping.app
+          spctl --assess --type execute --verbose Ping.app || \
+            echo "::warning::Gatekeeper rejects this build — it is ad-hoc signed and not notarized."
+
+      # Force-move the tag and edit in place; recreating the release would notify every releases
+      # watcher on every push to main.
+      - name: Publish tip
+        if: github.ref_type != 'tag'
+        run: |
+          set -euo pipefail
+          notes="The current state of \`main\`, rebuilt on every push. **Not a release** — it is whatever just landed, and it is replaced without notice.
+
+          Build \`$PING_VERSION\` from commit $GITHUB_SHA."
+          git tag --force tip
+          git push --force origin refs/tags/tip
+          if gh release view tip >/dev/null 2>&1; then
+            gh release edit tip --prerelease --title tip --notes "$notes"
+          else
+            gh release create tip --prerelease --title tip --notes "$notes"
+          fi
+          gh release upload tip "dist/$ZIP_NAME" --clobber
+
+      # A semver prerelease (`v0.2.0-rc1`) stays out of "latest", and so out of the Homebrew cask.
+      - name: Publish the release
+        if: github.ref_type == 'tag'
+        run: |
+          set -euo pipefail
+          case "$GITHUB_REF_NAME" in *-*) prerelease=--prerelease ;; *) prerelease= ;; esac
+          gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes \
+            --title "$GITHUB_REF_NAME" $prerelease "dist/$ZIP_NAME"
+
+      # An installation token: scoped to the one repository the app is installed on, expiring in an
+      # hour, and revoked when the job ends. Nothing here is a credential a person holds or renews.
+      - name: Mint a token for the tap
+        id: tap
+        if: github.ref_type == 'tag' && !contains(github.ref_name, '-') && env.TAP_APP_CLIENT_ID != ''
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.TAP_APP_CLIENT_ID }}
+          private-key: ${{ secrets.TAP_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: homebrew-tap
+          permission-contents: write
+
+      # A version becomes a cask; `tip` never does, because its cask pins nothing a build can change
+      # (`version :latest` / `sha256 :no_check` against a permalink). A semver prerelease is excluded
+      # by the rule that keeps it out of `latest`. The release above is already published when this
+      # runs, so a failure here leaves a good release with a stale cask — re-run, don't re-tag.
+      #
+      # A skipped step has no outputs, so the token is the whole gate.
+      - name: Bump the Homebrew cask
+        if: steps.tap.outputs.token != ''
+        env:
+          TAP_TOKEN: ${{ steps.tap.outputs.token }}
+          TAP_APP_SLUG: ${{ steps.tap.outputs.app-slug }}
+        run: |
+          set -euo pipefail
+          dir="$(brew --repository)/Library/Taps/lightningboltemoji/homebrew-tap"
+          git clone "https://x-access-token:$TAP_TOKEN@github.com/lightningboltemoji/homebrew-tap.git" "$dir"
+
+          # The commit is the app's, so it is authored as the app: its bot account's numeric id is
+          # what makes the noreply address resolve to that identity rather than to nobody. The
+          # address is still valid without it, and an unattributed commit is not worth failing a
+          # cask bump that the published release is already waiting on — so the id is optional
+          # (`${uid:+$uid+}` is "$uid+, or nothing at all if $uid is empty").
+          # `|| uid=` and not `|| true` inside: a failing `gh api` prints the error body to stdout,
+          # so the substitution succeeds at capturing it and only the exit status says otherwise.
+          uid="$(gh api "/users/$TAP_APP_SLUG%5Bbot%5D" --jq .id 2>/dev/null)" || uid=""
+          git -C "$dir" config user.name  "$TAP_APP_SLUG[bot]"
+          git -C "$dir" config user.email "${uid:+$uid+}$TAP_APP_SLUG[bot]@users.noreply.github.com"
+
+          # The checksum of the archive we just published, not a re-download of it.
+          sha="$(shasum -a 256 "dist/$ZIP_NAME" | cut -d' ' -f1)"
+          brew bump-cask-pr --write-only --commit --no-audit --no-style \
+            --version "$PING_VERSION" --sha256 "$sha" lightningboltemoji/tap/ping
+
+          # Both, because they catch disjoint things: audit passes a cask whose `desc` style fails,
+          # and `--online` is what fetches the published URL and verifies the checksum against it.
+          brew style --cask lightningboltemoji/tap/ping
+          brew audit --cask --online lightningboltemoji/tap/ping
+
+          git -C "$dir" push origin HEAD:main
+
+      - name: Summary
+        run: |
+          set -euo pipefail
+          {
+            echo "### Ping \`$PING_VERSION\`"
+            echo
+            echo '```'
+            shasum -a 256 "dist/$ZIP_NAME"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

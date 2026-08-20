@@ -1,0 +1,35 @@
+# Build and test every pull request. Pushes to main are covered by `release.yml`, which runs the
+# same steps before it publishes anything — there is no point building main twice.
+#
+# `macos-26` is the platform floor (Package.swift pins `.macOS(.v26)`); it is Apple Silicon and its
+# default Xcode is a 26.x, so nothing here selects a toolchain.
+name: ci
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Toolchain
+        run: swift --version
+
+      # AGENTS.md makes `swift format` a gate; this is that gate as a check rather than an edit.
+      - name: Format
+        run: make lint
+
+      - name: Test
+        run: make test
+
+      # `app`, not `build`: it compiles the same release binaries and then assembles and signs the
+      # bundle, which is the step release.yml depends on and the only one that can break on its own.
+      - name: Bundle
+        run: make app
