@@ -149,13 +149,14 @@ extension Setting {
   /// naming it here is what keeps a window's list of tabs one list rather than "the schema's,
   /// plus one".
   public enum Section: String, CaseIterable, Sendable {
-    case general, glow, shelf, apps
+    case general, glow, shelf, notch, apps
 
     public var title: String {
       switch self {
       case .general: "General"
       case .glow: "Glow"
       case .shelf: "Shelf"
+      case .notch: "Notch"
       case .apps: "Apps"
       }
     }
@@ -262,7 +263,7 @@ extension Codec where Value == PingColor {
 extension Setting {
 
   /// Every setting the file may carry, in the order a window shows them.
-  public static let all: [Setting] = general + glow + shelf
+  public static let all: [Setting] = general + glow + shelf + notch
 
   /// The settings in one section, ordered as written.
   public static func all(in section: Section) -> [Setting] {
@@ -404,5 +405,58 @@ extension Setting {
       label: "Show badges",
       help: "Whether each icon carries the badge the Dock is showing.",
       section: .shelf),
+  ]
+
+  private static let notch: [Setting] = [
+    Setting(
+      ["notch", "enabled"], \.notch.enabled, .toggle,
+      label: "Enabled",
+      help: "The master switch for the whole effect, whatever the apps say.",
+      section: .notch),
+    Setting(
+      ["notch", "placement"], \.notch.placement, .word,
+      label: "Placement",
+      help: "Which side of the notch the indicators hang in.",
+      section: .notch),
+    Setting(
+      ["notch", "style"], \.notch.style, .word,
+      label: "Style",
+      help: "What one indicator is drawn as.",
+      section: .notch),
+    Setting(
+      ["notch", "max-width"], \.notch.maxWidth, .number(0...600, .points),
+      label: "Maximum width",
+      help: "How far the strip may grow on each side; past it the tail takes turns.",
+      section: .notch),
+    Setting(
+      ["notch", "always-show"], \.notch.alwaysShow, .toggle,
+      label: "Always show",
+      help: "Whether a screen with no notch draws one even with nothing badged.",
+      section: .notch),
+    Setting(
+      ["notch", "width"], \.notch.width, .number(60...600, .points),
+      label: "Width",
+      help: "How wide the stand-in notch is on a screen that has none.",
+      section: .notch),
+    Setting(
+      ["notch", "corner-radius"], \.notch.cornerRadius, .number(0...30, .points),
+      label: "Corner radius",
+      help: "How round the two bottom corners of the strip are.",
+      section: .notch),
+    Setting(
+      ["notch", "item-size"], \.notch.itemSize, .number(2...32, .points),
+      label: "Item size",
+      help: "How large one indicator is drawn.",
+      section: .notch, advanced: true),
+    Setting(
+      ["notch", "gap"], \.notch.gap, .number(0...32, .points),
+      label: "Gap",
+      help: "How much room there is between one indicator and the next.",
+      section: .notch, advanced: true),
+    Setting(
+      ["notch", "grow-ms"], \.notch.growMS, .count(0...5_000, .milliseconds),
+      label: "Grow duration",
+      help: "How long the strip takes to open or close.",
+      section: .notch, advanced: true),
   ]
 }

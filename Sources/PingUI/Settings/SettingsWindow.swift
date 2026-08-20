@@ -2,7 +2,7 @@
 //  SettingsWindow.swift
 //  PingUI
 //
-//  The settings window: four tabs, a diagnostics bar, and Save.
+//  The settings window: a tab per section, a diagnostics bar, and Save.
 //
 //  **The file is still the settings.** This window is a reader and writer for `ping.toml`, not a
 //  second source of truth — every control writes one key through `Draft`, and "Edit ping.toml" is
@@ -99,6 +99,7 @@ public struct SettingsView: View {
     case .general: "gearshape"
     case .glow: "light.max"
     case .shelf: "rectangle.topthird.inset.filled"
+    case .notch: "laptopcomputer"
     case .apps: "square.grid.2x2"
     }
   }

@@ -91,12 +91,16 @@ Five consequences, and they are the whole design:
   badge in the middle of a screen you are looking straight through. The answer is area, slow motion and
   the _periphery_ — a gradient across a whole screen edge, breathing over a couple of seconds — because
   those are what the eye catches without being pointed at them. That is the bar a future effect clears:
-  noticeable at a glance nobody intended to take, and legible without focusing on it. Detail is the
-  **shelf's** job, and the shelf is the one effect that says _which_ app.
+  noticeable at a glance nobody intended to take, and legible without focusing on it. The three
+  effects divide it between them: the **glow** is area and no identity, and says _something_; the
+  **notch** is identity without detail, and says _who_, in the one strip of screen that is already
+  dead space; the **shelf** is detail — icons, names and counts — and says _what and how much_.
 - **An edge holds one glow at a time, so contention is resolved in time rather than in space.** Two
   apps on the same edge do not get half each — they take turns, the newest first, crossfading between
   them. The pulse follows from that and is deliberately **global**: two apps sharing an edge and
-  breathing at different rates is not one effect, it is two fighting over the same pixels.
+  breathing at different rates is not one effect, it is two fighting over the same pixels. The notch
+  answers the same way when more apps are badged than its last slot can hold, and for the same
+  reason: an effect that dropped one would under-report the Dock rather than share the room.
 - **Persistence is the product, so every exit is load-bearing.** An effect that will not go away is the
   failure mode, so there are four ways out and each answers a different question. **Acknowledge** is _I
   have seen it_ — a statement about a count, so a badge that grows past what you acknowledged is new

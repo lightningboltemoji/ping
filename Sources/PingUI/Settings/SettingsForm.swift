@@ -2,8 +2,8 @@
 //  SettingsForm.swift
 //  PingUI
 //
-//  Three tabs, no three tab files: General, Glow and Shelf are the sections of the settings table
-//  (`ConfigSchema.swift`), and a section is laid out by walking it.
+//  Four tabs, no four tab files: General, Glow, Shelf and Notch are the sections of the settings
+//  table (`ConfigSchema.swift`), and a section is laid out by walking it.
 //
 //  **One control per `Kind`, not one per setting.** A setting added to the table appears here with
 //  nothing to write, which is the whole reason the table exists — the alternative is a second list

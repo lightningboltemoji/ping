@@ -24,7 +24,8 @@ public struct PreviewEffects: OptionSet, Equatable, Sendable {
 
   public static let glow = PreviewEffects(rawValue: 1 << 0)
   public static let shelf = PreviewEffects(rawValue: 1 << 1)
-  public static let all: PreviewEffects = [.glow, .shelf]
+  public static let notch = PreviewEffects(rawValue: 1 << 2)
+  public static let all: PreviewEffects = [.glow, .shelf, .notch]
 }
 
 public struct EffectPreview: Equatable, Sendable {

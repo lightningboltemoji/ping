@@ -50,6 +50,63 @@ struct EffectResolverTests {
     #expect(state.shelf == nil)
   }
 
+  @Test("the strip is absent, not empty, when no app subscribed to it")
+  func notchAbsent() throws {
+    let state = render(try config(twoApps), BadgeSnapshot(badges: ["Slack": Badge(raw: "3")]))
+    #expect(state.notch == nil)
+  }
+
+  @Test("notch items come out in file order, carrying the app's colour and the strip's style")
+  func notchItems() throws {
+    let parsed = try config(
+      """
+      [notch]
+      style = "icon"
+
+      [apps.Slack]
+      notch = { color = "#611f69" }
+
+      [apps.Mail]
+      notch = {}
+      """)
+    let url = URL(fileURLWithPath: "/Applications/Mail.app")
+    let snapshot = BadgeSnapshot(
+      badges: ["Slack": Badge(raw: "3"), "Mail": Badge(raw: "")], appURLs: ["Mail": url])
+    let notch = try #require(render(parsed, snapshot).notch)
+    #expect(notch.items.map(\.appName) == ["Slack", "Mail"])
+    #expect(notch.items.first?.color == PingColor("#611f69"))
+    #expect(notch.items.last?.color == .named(.red))
+    #expect(notch.items.last?.style == .icon)
+    #expect(notch.items.last?.appURL == url)
+  }
+
+  @Test("`always-show` keeps the strip on screen with nothing in it")
+  func notchAlwaysShow() throws {
+    let parsed = try config(
+      """
+      [notch]
+      always-show = true
+
+      [apps.Slack]
+      notch = {}
+      """)
+    let quiet = try #require(render(parsed, BadgeSnapshot()).notch)
+    #expect(quiet.items.isEmpty)
+    // And the master switch is still the last word.
+    let off = try config("[notch]\nalways-show = true\nenabled = false\n")
+    #expect(render(off, BadgeSnapshot()).notch == nil)
+  }
+
+  @Test("a preview of the notch alone is never an empty screen")
+  func notchPreviewIsNeverEmpty() throws {
+    var runtime = RuntimeState()
+    runtime.preview = EffectPreview(snapshot: BadgeSnapshot(), effects: .notch)
+    #expect(render(try config(twoApps), BadgeSnapshot(), runtime).notch != nil)
+    // A preview about something else says nothing about the strip.
+    runtime.preview = EffectPreview(snapshot: BadgeSnapshot(), effects: .glow)
+    #expect(render(try config(twoApps), BadgeSnapshot(), runtime).notch == nil)
+  }
+
   @Test("snooze holds everything back")
   func snooze() throws {
     var runtime = RuntimeState()

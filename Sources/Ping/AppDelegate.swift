@@ -24,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
   private let glow = GlowRenderer()
   private let shelf = ShelfRenderer()
+  private let notch = NotchRenderer()
   private let monitor = BadgeMonitor()
   private let loader = ConfigLoader()
   private var tasks: [Task<Void, Never>] = []
@@ -39,13 +40,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // One loop, watching one derived value.
     tasks.append(
-      Task { @MainActor [engine, glow, shelf] in
+      Task { @MainActor [engine, glow, shelf, notch] in
         var last: RenderState?
         for await state in Observations({ engine.renderState }) {
           guard state != last else { continue }
           last = state
           glow.render(state)
           shelf.render(state)
+          notch.render(state)
         }
       })
 
@@ -60,10 +62,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       })
 
     tasks.append(
-      Task { @MainActor [glow, shelf] in
+      Task { @MainActor [glow, shelf, notch] in
         for await _ in ScreenTopology.changes() {
           glow.screenParametersChanged()
           shelf.screenParametersChanged()
+          notch.screenParametersChanged()
         }
       })
 

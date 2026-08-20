@@ -18,6 +18,7 @@ struct ConfigExampleTests {
 
     #expect(config.glow.pulse == PulseSettings())  // the example writes the built-ins
     #expect(config.shelf == ShelfSettings())
+    #expect(config.notch == NotchSettings())
 
     #expect(config.apps.map(\.name) == ["Slack", "Google Chrome", "Mail", "Messages"])
 
@@ -26,10 +27,12 @@ struct ConfigExampleTests {
     #expect(config.resolvedGlow(for: slack, badge: .count)?.color == PingColor("#611f69"))
     #expect(config.resolvedGlow(for: slack, badge: .count)?.edge == .left)
     #expect(config.shelfShows(slack))
+    #expect(config.resolvedNotch(for: slack, badge: .count)?.color == PingColor("#611f69"))
 
     let chrome = try #require(config.app(named: "Google Chrome"))
     #expect(config.resolvedGlow(for: chrome, badge: .dot) == ResolvedGlow.builtin)
     #expect(!config.shelfShows(chrome))
+    #expect(config.resolvedNotch(for: chrome, badge: .count) == nil)
 
     let mail = try #require(config.app(named: "Mail"))
     let mailGlow = try #require(config.resolvedGlow(for: mail, badge: .count))
@@ -43,5 +46,7 @@ struct ConfigExampleTests {
     #expect(config.resolvedGlow(for: messages, badge: .count)?.color == .named(.green))
     #expect(config.resolvedGlow(for: messages, badge: .dot) == nil)
     #expect(config.shelfShows(messages))
+    // `notch = {}` is a subscription and nothing else, so it is drawn in the Dock badge's red.
+    #expect(config.resolvedNotch(for: messages, badge: .dot)?.color == .named(.red))
   }
 }

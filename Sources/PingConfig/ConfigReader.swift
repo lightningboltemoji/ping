@@ -45,6 +45,9 @@ extension Config: ConfigModel {
     if var shelfTable = try table.takeTable("shelf") {
       shelf = try ShelfSettings(reading: &shelfTable)
     }
+    if var notchTable = try table.takeTable("notch") {
+      notch = try NotchSettings(reading: &notchTable)
+    }
 
     // The apps tree is read bespoke rather than through the enumerable settings table:
     // its middle segment is a name the user invented.
@@ -123,6 +126,9 @@ extension AppConfig {
     if var shelfTable = try table.takeTable("shelf") {
       shelf = try AppShelf(reading: &shelfTable)
     }
+    if var notchTable = try table.takeTable("notch") {
+      notch = try AppNotch(reading: &notchTable)
+    }
     try table.reportUnknownKeys()
   }
 }
@@ -141,10 +147,36 @@ extension AppGlow: ConfigModel {
   }
 }
 
+extension NotchSettings: ConfigModel {
+  public init(reading table: inout ConfigTable) throws {
+    self.init()
+    enabled = try table.takeBool("enabled") ?? enabled
+    placement = try table.takeEnum("placement", as: NotchPlacement.self) ?? placement
+    style = try table.takeEnum("style", as: NotchStyle.self) ?? style
+    maxWidth = try table.takeDouble("max-width", in: 0...600) ?? maxWidth
+    alwaysShow = try table.takeBool("always-show") ?? alwaysShow
+    width = try table.takeDouble("width", in: 60...600) ?? width
+    cornerRadius = try table.takeDouble("corner-radius", in: 0...30) ?? cornerRadius
+    itemSize = try table.takeDouble("item-size", in: 2...32) ?? itemSize
+    gap = try table.takeDouble("gap", in: 0...32) ?? gap
+    growMS = try table.takeInt("grow-ms", in: 0...5_000) ?? growMS
+    try table.reportUnknownKeys()
+  }
+}
+
 extension AppShelf: ConfigModel {
   public init(reading table: inout ConfigTable) throws {
     self.init()
     enabled = try table.takeBool("enabled")
+    try table.reportUnknownKeys()
+  }
+}
+
+extension AppNotch: ConfigModel {
+  public init(reading table: inout ConfigTable) throws {
+    self.init()
+    enabled = try table.takeBool("enabled")
+    color = try table.takeColor("color")
     try table.reportUnknownKeys()
   }
 }

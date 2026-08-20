@@ -20,6 +20,7 @@ color = "green"                 # a name, or "#rrggbb" / "#rrggbbaa"
 [apps.Slack]
 glow  = { color = "#611f69", edge = "left" }
 shelf = {}                      # and put it on the shelf
+notch = { color = "#611f69" }   # and a dot in the notch
 
 [apps.Messages.glow]
 color = "green"

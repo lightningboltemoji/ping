@@ -213,8 +213,8 @@ public final class SettingsModel {
       guard let name = hoveredApp ?? selectedApp else { return nil }
       return EffectPreview(snapshot: snapshot(badging: [name]), effects: .all)
 
-    case .glow, .shelf:
-      let effects: PreviewEffects = section == .glow ? .glow : .shelf
+    case .glow, .shelf, .notch:
+      let effects = Self.effects(of: section)
       let subscribed = config.apps.filter { subscribes($0, to: effects, in: config) }
       guard subscribed.isEmpty else {
         return EffectPreview(
@@ -228,11 +228,24 @@ public final class SettingsModel {
     }
   }
 
+  /// The effect a tab is about. Everything outside it stays off screen while that tab is up.
+  private static func effects(of section: Setting.Section) -> PreviewEffects {
+    switch section {
+    case .glow: .glow
+    case .shelf: .shelf
+    case .notch: .notch
+    case .general, .apps: .all
+    }
+  }
+
   private func subscribes(_ app: AppConfig, to effects: PreviewEffects, in config: Config) -> Bool {
     if effects.contains(.glow), config.resolvedGlow(for: app, badge: previewBadge) != nil {
       return true
     }
     if effects.contains(.shelf), config.shelfShows(app) {
+      return true
+    }
+    if effects.contains(.notch), config.resolvedNotch(for: app, badge: previewBadge) != nil {
       return true
     }
     return false
@@ -263,10 +276,10 @@ public final class SettingsModel {
   /// Stand-in apps for a config that subscribes nobody to the effect being edited.
   ///
   /// Taken from the Dock where it can be, so the shelf previews real icons and real names rather
-  /// than a fiction. The shelf is a row and wants a few; a glow is one wash of colour per edge and
-  /// wants one.
+  /// than a fiction. The shelf is a row and the notch is a strip of them; both want a few. A glow
+  /// is one wash of colour per edge and wants one.
   private func samples(for effects: PreviewEffects, in config: Config) -> [AppConfig] {
-    let wanted = effects.contains(.shelf) ? 3 : 1
+    let wanted = effects.contains(.glow) ? 1 : 3
     let listed = Set(config.apps.map(\.name))
     let names = engine.snapshot.dockTitles.filter { !listed.contains($0) }.prefix(wanted)
     // An unreadable Dock (no Accessibility grant yet) still gets something to look at.
@@ -275,7 +288,8 @@ public final class SettingsModel {
       AppConfig(
         name: name,
         glow: effects.contains(.glow) ? AppGlow() : nil,
-        shelf: effects.contains(.shelf) ? AppShelf() : nil)
+        shelf: effects.contains(.shelf) ? AppShelf() : nil,
+        notch: effects.contains(.notch) ? AppNotch() : nil)
     }
   }
 

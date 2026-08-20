@@ -43,6 +43,19 @@ public enum ConfigExample {
     show-names  = true
     show-badges = true
 
+    # ─── Notch — indicators in a strip that grows out of the notch ────────
+    [notch]
+    enabled       = true            # master switch for the whole effect
+    placement     = "split"         # "left" | "right" | "split"
+    style         = "dot"           # "dot" | "icon" | "count"
+    max-width     = 120             # extra px per side; past this the tail takes turns
+    always-show   = false           # a stand-in notch on a screen without one
+    width         = 185             # that stand-in's own width
+    corner-radius = 10
+    item-size     = 8               # dot diameter, or icon edge
+    gap           = 8               # between one indicator and the next
+    grow-ms       = 350             # how long the strip takes to open or close
+
     # ─── Apps ─────────────────────────────────────────────────────────────
     # The table key is the app's name as it appears in the macOS Dock. An
     # effect applies to an app when it is written under that app; `{}` takes
@@ -51,6 +64,7 @@ public enum ConfigExample {
     [apps.Slack]
     glow  = { color = "#611f69", edge = "left" }
     shelf = {}
+    notch = { color = "#611f69" }   # the notch takes `enabled` and `color`, no more
 
     [apps."Google Chrome"]
     glow = {}
@@ -63,6 +77,7 @@ public enum ConfigExample {
     # Overriding one needs the long form.
     [apps.Messages]
     shelf = {}
+    notch = {}                      # red, the Dock badge's own colour
 
     [apps.Messages.glow]
     color = "green"

@@ -183,6 +183,9 @@ private struct AppDetail: View {
         LabeledContent("Shelf") {
           Toggle("", isOn: subscription(to: "shelf", isOn: app.shelf != nil)).labelsHidden()
         }
+        LabeledContent("Notch") {
+          Toggle("", isOn: subscription(to: "notch", isOn: app.notch != nil)).labelsHidden()
+        }
       } header: {
         Text(app.name).font(.title3)
       } footer: {
@@ -197,6 +200,12 @@ private struct AppDetail: View {
         }
         ForEach(BadgeKind.allCases, id: \.self) { kind in
           BadgeKindSection(app: app, kind: kind, model: model)
+        }
+      }
+
+      if app.notch != nil {
+        Section("Notch") {
+          NotchRows(notch: app.notch ?? AppNotch(), at: root.appending("notch"), model: model)
         }
       }
     }
@@ -264,6 +273,40 @@ private struct BadgeKindSection: View {
         model.apply(.expand(["apps", app.name, "glow"]))
         model.apply(.key(key, .emptyTable()))
       })
+  }
+}
+
+/// The two the notch takes per app. `color` is the point of the effect — indicators are told
+/// apart by nothing else — and its default is the Dock badge's own red.
+private struct NotchRows: View {
+  let notch: AppNotch
+  let at: TOMLKey
+  @Bindable var model: SettingsModel
+
+  var body: some View {
+    InheritableRow(label: "Enabled", isSet: notch.enabled != nil, key: at.appending("enabled")) {
+      Toggle("", isOn: enabled(notch.enabled ?? true)).labelsHidden()
+    } write: {
+      model.apply(.key(at.appending("enabled"), .bool(true)))
+    }
+
+    InheritableRow(label: "Color", isSet: notch.color != nil, key: at.appending("color")) {
+      ColorWell(color: color(notch.color ?? ResolvedNotchItem.defaultColor))
+    } write: {
+      model.apply(.key(at.appending("color"), .string(ResolvedNotchItem.defaultColor.written)))
+    }
+  }
+
+  private func enabled(_ current: Bool) -> Binding<Bool> {
+    Binding(
+      get: { current },
+      set: { model.apply(.key(at.appending("enabled"), .bool($0))) })
+  }
+
+  private func color(_ current: PingColor) -> Binding<PingColor> {
+    Binding(
+      get: { current },
+      set: { model.apply(.key(at.appending("color"), .string($0.written))) })
   }
 }
 

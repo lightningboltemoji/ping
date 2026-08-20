@@ -33,6 +33,7 @@ public enum EffectResolver {
     if !previewing && runtime.isSnoozed(at: now) { return state }
 
     var shelfItems: [ShelfItem] = []
+    var notchItems: [NotchItem] = []
 
     // Stand-ins are only ever *added*: an app the file already describes is drawn the way the
     // file describes it, so a preview cannot quietly contradict the config it is previewing.
@@ -53,10 +54,23 @@ public enum EffectResolver {
         shelfItems.append(
           ShelfItem(appName: app.name, badge: badge, appURL: effective.appURLs[app.name]))
       }
+      if effects.contains(.notch), let item = config.resolvedNotch(for: app, badge: badge.kind) {
+        notchItems.append(
+          NotchItem(
+            appName: app.name, badge: badge, color: item.color, style: item.style,
+            appURL: effective.appURLs[app.name]))
+      }
     }
 
     if !shelfItems.isEmpty {
       state.shelf = ShelfState(settings: config.shelf, items: shelfItems)
+    }
+    // The strip is also on screen with nothing in it: `always-show` is the stand-in standing
+    // by, and a preview of the notch alone must never be an empty screen.
+    if config.notch.enabled,
+      !notchItems.isEmpty || config.notch.alwaysShow || preview?.effects == .notch
+    {
+      state.notch = NotchState(settings: config.notch, items: notchItems)
     }
     return state
   }

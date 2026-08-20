@@ -13,7 +13,7 @@ import PingCore
 public final class ShelfRenderer {
 
   private var windows: [CGDirectDisplayID: ShelfWindow] = [:]
-  private var icons: [String: NSImage] = [:]
+  private let icons = IconCache()
   private var geometry: (anchor: ShelfAnchor, margin: Double)?
   private var last = RenderState()
 
@@ -27,7 +27,7 @@ public final class ShelfRenderer {
       return
     }
 
-    loadIcons(for: shelf.items)
+    for item in shelf.items { icons.load(item.appName, from: item.appURL) }
 
     // Anchor and margin are baked into the window frame, so a change to either means new
     // windows rather than new contents.
@@ -45,7 +45,7 @@ public final class ShelfRenderer {
 
     for screen in screens {
       let window = window(for: screen, shelf: shelf)
-      window.update(shelf: shelf, icons: icons)
+      window.update(shelf: shelf, icons: icons.images)
       window.orderFrontRegardless()
     }
 
@@ -61,16 +61,9 @@ public final class ShelfRenderer {
 
   private func window(for screen: NSScreen, shelf: ShelfState) -> ShelfWindow {
     if let existing = windows[screen.displayID] { return existing }
-    let window = ShelfWindow(shelf: shelf, icons: icons, screen: screen.visibleFrame)
+    let window = ShelfWindow(shelf: shelf, icons: icons.images, screen: screen.visibleFrame)
     windows[screen.displayID] = window
     return window
-  }
-
-  private func loadIcons(for items: [ShelfItem]) {
-    for item in items where icons[item.appName] == nil {
-      guard let url = item.appURL else { continue }
-      icons[item.appName] = NSWorkspace.shared.icon(forFile: url.path)
-    }
   }
 
   private func hideAll() {

@@ -25,7 +25,7 @@ Guiding bias, restated: **stay small.** Ping reads one string per app and draws 
                                             │        (pure, no framework)          │
    menu bar · settings · frontmost ──► RuntimeState ┘                              │
                                                                                    ▼
-                                                                  GlowRenderer · ShelfRenderer
+                                                     GlowRenderer · ShelfRenderer · NotchRenderer
                                                                      (NSWindow / CA / SwiftUI)
 ```
 
@@ -55,9 +55,9 @@ one `AsyncStream`, plus one notification observer. There is no observation re-ar
 
 | Loop         | Source                                    | Does                                                       |
 | ------------ | ----------------------------------------- | ---------------------------------------------------------- |
-| **render**   | `Observations { engine.renderState }`     | dedupes on `!=`, then `glow.render(state)`, `shelf.render(state)` |
+| **render**   | `Observations { engine.renderState }`     | dedupes on `!=`, then `glow.render(state)`, `shelf.render(state)`, `notch.render(state)` |
 | **poll**     | `BadgeMonitor.snapshots(interval:)`       | `engine.apply(snapshot)` — folds the reading in, ages acknowledgements |
-| **screens**  | `ScreenTopology.changes()`                | both renderers drop their windows and rebuild               |
+| **screens**  | `ScreenTopology.changes()`                | every renderer drops its windows and rebuilds               |
 | **config**   | `ConfigLoader.changes()`                  | `engine.apply(result)`, then syncs launch-at-login          |
 
 Two things outside the four:
@@ -153,6 +153,12 @@ ResolvedGlow.builtin  ⊕  [glow]  ⊕  apps.<App>.glow  ⊕  apps.<App>.glow.<c
   bare dot_.
 - **The shelf takes only `enabled` per app**, because the shelf is one shared object on one screen edge:
   a per-app anchor or padding would be several shelves disagreeing about where the shelf is.
+- **The notch takes `enabled` and `color`**, and its resolution is one layer rather than a cascade:
+  `[notch]` describes the strip, an app describes its own indicator, and `color` is the only thing an
+  indicator has of its own — its default is the Dock badge's red, so `notch = {}` is already legible.
+  `style` is deliberately not per-app, for the shelf-anchor reason: indicators disagreeing about their
+  own shape would be several notches. `resolvedNotch(for:badge:)` returns the same three `nil`s, and
+  is also where `count` falls back to a `dot` for a badge that has no digits to draw.
 
 `ResolutionTests` covers the whole table, one badge kind at a time.
 
@@ -202,12 +208,14 @@ Rules the resolver enforces:
 - A preview **bypasses every suppression** — no snooze, no acknowledgement, no focus suppression. The
   user is asking to see a setting, so the settings alone decide.
 - A preview is **scoped**: the Glow tab may not put a shelf on screen. Anything outside `effects` stays
-  dark whatever the config says.
+  dark whatever the config says. A preview about the notch alone is the one that also *adds* something:
+  it gets the strip whatever `always-show` says, because a Notch tab previewing an empty screen is
+  precisely the thing a preview must not be.
 - **Stand-ins are only ever added.** An app the file already describes is drawn the way the file
   describes it, so a preview cannot quietly contradict the config it is previewing. Stand-ins exist for
   the case where nobody is subscribed to the effect being edited — otherwise the shelf settings would
   preview an empty screen.
-- `isPreview` makes both renderers draw on the main screen only, whatever `monitors` says: a preview
+- `isPreview` makes every renderer draw on the main screen only, whatever `monitors` says: a preview
   answers to the window, and the window is on one screen.
 
 **The preview follows the window, not the pointer** (`SettingsModel.pushPreview`). Four bound values —
@@ -219,21 +227,22 @@ the control it was previewing.
 
 ## 7. The effects
 
-Both renderers hold their windows in a dictionary keyed by what would invalidate them, keep the last
-`RenderState` they were given, and rebuild from it on `screenParametersChanged()`.
+All three renderers hold their windows in a dictionary keyed by what would invalidate them, keep the
+last `RenderState` they were given, and rebuild from it on `screenParametersChanged()`.
 
-Both windows are borderless, `ignoresMouseEvents`, shadowless, and
+Every window is borderless, `ignoresMouseEvents`, shadowless, and
 `collectionBehavior = [.canJoinAllSpaces, .stationary]` — an effect belongs to a screen, not to a space
-(`PRINCIPLES.md §4`), and a window that stays on its origin space vanishes into a full-screen app.
-Neither is ever made key.
+(`PRINCIPLES.md §4`), and a window that stays on its origin space vanishes into a full-screen app. The
+notch's adds `.fullScreenAuxiliary`, because the strip hangs in the menu bar's own furniture. None is
+ever made key.
 
 ### 7.1 Glow
 
 - **One window per `(displayID, edge)`.** Glows are grouped by edge, and a window is handed every glow
   landing on its edge — the rotation between them is the view's problem, not the renderer's.
-- **`GlowRotator`** is an LRU: new glows go to the front, survivors keep their order, and `next()` moves
-  the current one to the back. If what is on screen disappears from the set, the next one is pulled up
-  immediately.
+- **`Rotator`** is the LRU both effects share: new entries go to the front, survivors keep their order,
+  and `next()` moves the current one to the back. If what is on screen disappears from the set, the
+  next one is pulled up immediately.
 - **`GlowView` is the animation state machine**, four phases driven by `CAAnimationDelegate`
   callbacks: `fadeIn → fadeOut → (crossfade | fadeIn) → …`. With one glow that is a breath; with several
   it is a breath and a handover. A glow removed mid-animation gets an accelerated fade-out proportional
@@ -251,9 +260,42 @@ Neither is ever made key.
   `PingUI` free of a second source of truth.
 - **Anchor and margin are baked into the window frame**, so changing either closes the windows and makes
   new ones rather than re-laying-out the old.
-- **Icons are cached by app name**, fetched from `NSWorkspace` using the `appURL` the Dock reading
-  carried. That is why `BadgeSnapshot` holds URLs and not `NSImage`s: the value type stays free of
-  AppKit, and the one place that needs pixels asks for them.
+- **Icons come from `IconCache`**, keyed by app name and fetched from `NSWorkspace` using the `appURL`
+  the Dock reading carried. That is why `BadgeSnapshot` holds URLs and not `NSImage`s: the value type
+  stays free of AppKit, and the one place that needs pixels asks for them.
+
+### 7.3 Notch
+
+A black strip hanging from the top edge — the notch, plus an extension either side holding one
+indicator per badged app. On a MacBook it grows out of the real cutout; on a screen without one it
+draws the notch too.
+
+- **The geometry is public API.** `ScreenTopology.notch(of:standInWidth:)` reads it: the two
+  `auxiliaryTop*Area` rects are both absent on a screen without a notch and both present on one with
+  it, so their absence is the test and the cutout is the gap between them. There is no public answer
+  for the cutout's corner radius, so `corner-radius` is a config value with a good default.
+- **`NotchLayout` is the policy** and lives in `PingCore`: `(items, settings)` in, two sides, a tail
+  and two widths out. Capacity per side is `floor((max-width − gap) / (item-size + gap))`; `split`
+  halves the list in file order and widens both sides to the wider one's width, so an odd number of
+  indicators does not tip the notch. The tail that does not fit takes turns in the last slot
+  (`PRINCIPLES.md §3`) on `NotchRenderer`'s own clock, because a badge that does not change produces
+  no render to ride on.
+- **One window per display**, `.statusBar` — the floor, because the menu bar's *text* composites above
+  anything lower. It is built at the strip's widest and never moved: a window that grew would be asking
+  the window server to re-place it over the menu bar sixty times a second.
+- **What moves is one layer.** `NotchLayer` animates the shape's `bounds` and `position` together, so
+  the two extensions can differ while the cutout stays put. Its bounds run from −(left extension + half
+  the cutout) to +(right extension + half the cutout), so `x = 0` is the cutout's middle whichever side
+  is opening — which is what lets an indicator be positioned from the notch rather than from an edge
+  that is moving; the indicators do not animate at all, and the opening strip reveals them.
+  `masksToBounds` is load-bearing — an indicator that escaped the shape would be a coloured dot loose
+  on the menu bar.
+- **Absent is retracted, not gone.** `RenderState.notch == nil` closes the strip to the cutout it grew
+  out of, or to nothing on a screen standing one in, so the effect leaves the way it arrived.
+- **The extension covers, it does not reserve.** macOS reflows nothing around it: on the left it hides
+  menu titles, on the right other apps' status items, and in full-screen it covers app content. Clicks
+  still land, so what is hidden still works. `max-width`, `placement` and the fact that the extension
+  is only out while something is badged are what hold it in proportion.
 
 ---
 
@@ -380,8 +422,8 @@ badge-kind override needs the braces taken apart before it can be written at all
   unsaved edits as the file having moved.
 - **Unsaved edits survive being closed and reopened.** A window that was shut is not an edit session
   that was abandoned; discarding is a button.
-- **Three tabs are the schema walked** (`SettingsForm` builds one control per `Kind`), and the fourth is
-  `AppsTab`, hand-written for the open tree. Its controls are three-state where the others are two: a
+- **Every tab but one is the schema walked** (`SettingsForm` builds one control per `Kind`), and that
+  one is `AppsTab`, hand-written for the open tree. Its controls are three-state where the others are two: a
   row either says something or defers, and "defers" has to be reachable, or a per-app colour could be
   set and never unset.
 
@@ -445,10 +487,13 @@ Ping/
     │                 BadgeMonitor (the poll) · BadgeSnapshot (one reading)
     │                 RuntimeState (snooze · acknowledgement · frontmost · preview)
     │                 EffectPreview · EffectResolver (THE decision) · RenderState
+    │                 NotchLayout (where the indicators go, as arithmetic)
     │                 EffectEngine (the one observable) · ConfigLoader (+ ConfigWatcher)
     │                 ScreenTopology (which screens, and when that changes)
-    ├── PingUI/       Glow/{GlowRenderer, GlowWindow, GlowView, GlowRotator}
+    ├── PingUI/       Glow/{GlowRenderer, GlowWindow, GlowView}
     │                 Shelf/{ShelfRenderer, ShelfWindow, ShelfView}
+    │                 Notch/{NotchRenderer, NotchWindow, NotchLayer}
+    │                 Rotator (the shared LRU) · IconCache
     │                 Settings/{SettingsWindow, SettingsModel, SettingsForm, AppsTab, DiagnosticsBar}
     │                 Draft (text ⇄ values) · MenuBar/MenuBarContent · Onboarding/AccessibilityView
     │                 Color (the one NSColor) · FontLoader · PingResources · Resources/
@@ -457,7 +502,8 @@ Ping/
 ```
 
 One spelling recurs and is worth recognising: every framework-touching subsystem is a **pure model plus
-a thin AppKit shell** (`GlowRotator`/`GlowView`, `Draft`/`SettingsModel`, `EffectResolver`/the
+a thin AppKit shell** (`Rotator`/`GlowView`, `NotchLayout`/`NotchLayer`, `Draft`/`SettingsModel`,
+`EffectResolver`/the
 renderers), so the interesting half is testable with no window server.
 
 ---
@@ -474,12 +520,17 @@ none of it needs a window server.
   (`ConfigExampleTests`), and the import fence (`ImportFenceTests`).
 - **`PingCoreTests`** — `AcknowledgementTests` for the count/dot rules that came across from the
   pre-rewrite poller unchanged, subtle, and previously untested; `EffectResolverTests` for what reaches
-  the screen: only badged apps, an unmentioned app rendering nothing, the shelf being absent rather than
-  empty, snooze, acknowledgement, focus suppression, `bundle-id` matching, and a preview standing in for
-  the live snapshot while ignoring every suppression.
+  the screen: only badged apps, an unmentioned app rendering nothing, the shelf and the notch being
+  absent rather than empty, snooze, acknowledgement, focus suppression, `bundle-id` matching, and a
+  preview standing in for the live snapshot while ignoring every suppression; and `NotchLayoutTests`
+  for the strip's arithmetic — capacity, the three placements, the split's equal-width rule, and a tail
+  that overflows rather than being dropped.
 - **`PingUITests`** — `DraftTests` for an edit as text, unset-on-default and a refusal that does not
   land; `SettingsModelTests` for the two-editor rules — a clean draft re-reading silently, a dirty one
-  reporting a conflict, Save held until it is resolved, and a save not reading as a reload.
+  reporting a conflict, Save held until it is resolved, and a save not reading as a reload; and
+  `NotchLayerTests` for the arithmetic reaching the screen — in each placement, the innermost indicator
+  one gap from the cutout in the window's own coordinates, and none of them outside the shape that
+  masks them.
 
 **What the suite does not cover**, and therefore needs the app actually running: anything about the
 window server (which space a window is on, whether an overlay survives a full-screen app), anything

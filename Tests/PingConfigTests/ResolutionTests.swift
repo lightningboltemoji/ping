@@ -122,6 +122,60 @@ struct ResolutionTests {
     #expect(parsed.app(named: "Slack")?.glow?.base.color == PingColor("#611f69"))
   }
 
+  @Test("the notch takes only `enabled` and `color` per app, and red when it says neither")
+  func notchMembership() throws {
+    let parsed = try config(
+      """
+      [apps.Slack]
+      notch = { color = "#611f69" }
+
+      [apps.Mail]
+      notch = {}
+
+      [apps.Notes]
+      notch = { enabled = false }
+
+      [apps.Reminders]
+      glow = {}
+      """)
+    #expect(
+      parsed.resolvedNotch(forAppNamed: "Slack", badge: .count)?.color == PingColor("#611f69"))
+    #expect(parsed.resolvedNotch(forAppNamed: "Mail", badge: .count)?.color == .named(.red))
+    // Subscribed and opted out, and never subscribed: two different sentences, one `nil`.
+    #expect(parsed.resolvedNotch(forAppNamed: "Notes", badge: .count) == nil)
+    #expect(parsed.resolvedNotch(forAppNamed: "Reminders", badge: .count) == nil)
+    #expect(parsed.app(named: "Notes")?.notch?.enabled == false)
+    #expect(parsed.app(named: "Reminders")?.notch == nil)
+  }
+
+  @Test("`[notch].enabled = false` empties the strip")
+  func notchMasterSwitch() throws {
+    let parsed = try config(
+      """
+      [notch]
+      enabled = false
+
+      [apps.Slack]
+      notch = { enabled = true }
+      """)
+    #expect(parsed.resolvedNotch(forAppNamed: "Slack", badge: .count) == nil)
+    #expect(parsed.resolvedNotch(forAppNamed: "Slack", badge: .dot) == nil)
+  }
+
+  @Test("`style = \"count\"` falls back to a dot for a badge that has no digits")
+  func notchCountFallsBackToDot() throws {
+    let parsed = try config(
+      """
+      [notch]
+      style = "count"
+
+      [apps.Slack]
+      notch = {}
+      """)
+    #expect(parsed.resolvedNotch(forAppNamed: "Slack", badge: .count)?.style == .count)
+    #expect(parsed.resolvedNotch(forAppNamed: "Slack", badge: .dot)?.style == .dot)
+  }
+
   @Test("the shelf takes only `enabled` per app")
   func shelfMembership() throws {
     let parsed = try config(

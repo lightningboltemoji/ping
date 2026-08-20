@@ -37,6 +37,17 @@ public enum ShelfAnchor: String, CaseIterable, Sendable {
   }
 }
 
+/// Which extension an app's indicator goes in, and therefore which side widens.
+public enum NotchPlacement: String, CaseIterable, Sendable {
+  case left, right, split
+}
+
+/// What one indicator is drawn as. Three, because that is the whole of Ping's alphabet
+/// (`PRINCIPLES.md` §1): area, identity, and the count itself.
+public enum NotchStyle: String, CaseIterable, Sendable {
+  case dot, icon, count
+}
+
 /// What kind of badge the Dock is showing. `DockReader` returns `nil` for no badge,
 /// `""` for a bare red dot and digits for a count.
 public enum BadgeKind: String, CaseIterable, Sendable {
@@ -145,6 +156,45 @@ public struct ShelfSettings: Equatable, Sendable {
   public init() {}
 }
 
+/// The `[notch]` table: a black strip hanging from the top edge, the width of the notch plus an
+/// extension either side, holding one indicator per badged app. On a screen with no notch of its
+/// own it draws one.
+public struct NotchSettings: Equatable, Sendable {
+  public var enabled: Bool = true
+  public var placement: NotchPlacement = .split
+  public var style: NotchStyle = .dot
+  /// Extra points per side. The extension covers what is under it rather than reserving room,
+  /// so this is a budget: past it the tail takes turns in the last slot.
+  public var maxWidth: Double = 120
+  /// Whether a screen with no notch draws the stand-in with nothing badged. On a screen that
+  /// has one this says nothing: the notch is already always there.
+  public var alwaysShow: Bool = false
+  /// The stand-in's own width. 185 is the 14" cutout exactly.
+  public var width: Double = 185
+  /// No public API answers for the real cutout's radius, so it is a value with a good default.
+  public var cornerRadius: Double = 10
+  public var itemSize: Double = 8
+  public var gap: Double = 8
+  public var growMS: Int = 350
+
+  public init() {}
+}
+
+/// One indicator with every key answered — what a renderer is handed.
+public struct ResolvedNotchItem: Equatable, Sendable {
+  public var color: PingColor
+  public var style: NotchStyle
+
+  /// What an app that says only `notch = {}` is drawn in: the Dock badge's own red, so an
+  /// indicator is legible without naming a colour.
+  public static let defaultColor: PingColor = .named(.red)
+
+  public init(color: PingColor, style: NotchStyle) {
+    self.color = color
+    self.style = style
+  }
+}
+
 /// An app's glow subscription: what it overrides, and what each badge kind overrides
 /// on top of that.
 public struct AppGlow: Equatable, Sendable {
@@ -168,6 +218,18 @@ public struct AppShelf: Equatable, Sendable {
   }
 }
 
+/// An app's notch subscription. Only these two: `style` is the strip's own, because indicators
+/// disagreeing about their shape is the same mistake as a per-app shelf anchor.
+public struct AppNotch: Equatable, Sendable {
+  public var enabled: Bool?
+  public var color: PingColor?
+
+  public init(enabled: Bool? = nil, color: PingColor? = nil) {
+    self.enabled = enabled
+    self.color = color
+  }
+}
+
 /// One `[apps.<DockTitle>]` block. An effect written under it is a subscription; an
 /// effect absent from it means the app does not get that effect at all.
 public struct AppConfig: Equatable, Sendable {
@@ -175,14 +237,17 @@ public struct AppConfig: Equatable, Sendable {
   public var bundleID: String?
   public var glow: AppGlow?
   public var shelf: AppShelf?
+  public var notch: AppNotch?
 
   public init(
-    name: String, bundleID: String? = nil, glow: AppGlow? = nil, shelf: AppShelf? = nil
+    name: String, bundleID: String? = nil, glow: AppGlow? = nil, shelf: AppShelf? = nil,
+    notch: AppNotch? = nil
   ) {
     self.name = name
     self.bundleID = bundleID
     self.glow = glow
     self.shelf = shelf
+    self.notch = notch
   }
 }
 
@@ -190,6 +255,7 @@ public struct Config: Equatable, Sendable {
   public var general = GeneralSettings()
   public var glow = GlowSettings()
   public var shelf = ShelfSettings()
+  public var notch = NotchSettings()
   public var apps: [AppConfig] = []
 
   /// An absent file and an empty file mean the same thing: every default.
@@ -223,5 +289,19 @@ extension Config {
   public func shelfShows(_ app: AppConfig) -> Bool {
     guard shelf.enabled, let appShelf = app.shelf else { return false }
     return appShelf.enabled ?? true
+  }
+
+  /// This app's indicator, or `nil` three ways: the master switch is off, the app never
+  /// subscribed, or it subscribed and opted out. The style is the strip's, except that `count`
+  /// has no digits to draw for a bare dot and falls back to one.
+  public func resolvedNotch(for app: AppConfig, badge kind: BadgeKind) -> ResolvedNotchItem? {
+    guard notch.enabled, let appNotch = app.notch, appNotch.enabled ?? true else { return nil }
+    let style: NotchStyle = notch.style == .count && kind == .dot ? .dot : notch.style
+    return ResolvedNotchItem(color: appNotch.color ?? ResolvedNotchItem.defaultColor, style: style)
+  }
+
+  public func resolvedNotch(forAppNamed name: String, badge kind: BadgeKind) -> ResolvedNotchItem? {
+    guard let app = app(named: name) else { return nil }
+    return resolvedNotch(for: app, badge: kind)
   }
 }

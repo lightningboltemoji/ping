@@ -18,7 +18,7 @@ class GlowView: NSView, @preconcurrency CAAnimationDelegate {
   private var glowLayer: CAGradientLayer!
   let edge: Edge
 
-  private var rotator = GlowRotator()
+  private var rotator = Rotator<ResolvedGlow>()
   private var displayed: ResolvedGlow?
   private var pulse = PulseSettings()
 
