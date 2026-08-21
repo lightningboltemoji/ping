@@ -27,6 +27,9 @@ color = "green"
 
 [apps.Messages.glow.dot]
 enabled = false                 # only glow when there's an actual count
+
+[apps.Messages.notch.dot]
+color = "white"                 # a bare dot is quieter than a count
 ```
 
 The CLI utility (`ping-dot-app`) can be used to both validate and explain:

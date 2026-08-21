@@ -46,7 +46,9 @@ struct ConfigExampleTests {
     #expect(config.resolvedGlow(for: messages, badge: .count)?.color == .named(.green))
     #expect(config.resolvedGlow(for: messages, badge: .dot) == nil)
     #expect(config.shelfShows(messages))
-    // `notch = {}` is a subscription and nothing else, so it is drawn in the Dock badge's red.
-    #expect(config.resolvedNotch(for: messages, badge: .dot)?.color == .named(.red))
+    // An empty `[apps.Messages.notch]` is a subscription and nothing else, so a count is drawn in
+    // the Dock badge's red — and the `dot` table under it is the one thing that departs from that.
+    #expect(config.resolvedNotch(for: messages, badge: .count)?.color == .named(.red))
+    #expect(config.resolvedNotch(for: messages, badge: .dot)?.color == .named(.white))
   }
 }

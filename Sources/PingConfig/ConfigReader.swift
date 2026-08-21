@@ -156,7 +156,6 @@ extension NotchSettings: ConfigModel {
     maxWidth = try table.takeDouble("max-width", in: 0...600) ?? maxWidth
     alwaysShow = try table.takeBool("always-show") ?? alwaysShow
     width = try table.takeDouble("width", in: 60...600) ?? width
-    cornerRadius = try table.takeDouble("corner-radius", in: 0...30) ?? cornerRadius
     itemSize = try table.takeDouble("item-size", in: 2...32) ?? itemSize
     gap = try table.takeDouble("gap", in: 0...32) ?? gap
     growMS = try table.takeInt("grow-ms", in: 0...5_000) ?? growMS
@@ -172,11 +171,27 @@ extension AppShelf: ConfigModel {
   }
 }
 
-extension AppNotch: ConfigModel {
+extension NotchLayer: ConfigModel {
+  /// The same two keys are legal at `apps.X.notch` and at `apps.X.notch.{count,dot}`, which is
+  /// what makes this cascade read like the glow's.
   public init(reading table: inout ConfigTable) throws {
     self.init()
     enabled = try table.takeBool("enabled")
     color = try table.takeColor("color")
     try table.reportUnknownKeys()
+  }
+}
+
+extension AppNotch: ConfigModel {
+  public init(reading table: inout ConfigTable) throws {
+    self.init()
+    // Badge-kind tables come out first so the rest of the table is the app's own layer.
+    if var countTable = try table.takeTable("count") {
+      count = try NotchLayer(reading: &countTable)
+    }
+    if var dotTable = try table.takeTable("dot") {
+      dot = try NotchLayer(reading: &dotTable)
+    }
+    base = try NotchLayer(reading: &table)
   }
 }

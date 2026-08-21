@@ -51,7 +51,6 @@ public enum ConfigExample {
     max-width     = 120             # extra px per side; past this the tail takes turns
     always-show   = false           # a stand-in notch on a screen without one
     width         = 185             # that stand-in's own width
-    corner-radius = 10
     item-size     = 8               # dot diameter, or icon edge
     gap           = 8               # between one indicator and the next
     grow-ms       = 350             # how long the strip takes to open or close
@@ -73,17 +72,23 @@ public enum ConfigExample {
     glow = { color = "blue", edge = "right", size = 0.6, opacity = 0.7 }
 
     # Badges come in two kinds: `count` (a number) and `dot` (a bare red
-    # dot). Either may override the app's settings, or opt out entirely.
-    # Overriding one needs the long form.
+    # dot). Under `glow` or under `notch`, either kind may override what the
+    # app said, or opt out entirely. Overriding one needs the long form:
+    # TOML will not let a header reopen a table written between braces.
     [apps.Messages]
     shelf = {}
-    notch = {}                      # red, the Dock badge's own colour
 
     [apps.Messages.glow]
     color = "green"
 
     [apps.Messages.glow.dot]
     enabled = false                 # only glow when there's an actual count
+
+    # No keys: red, the Dock badge's own colour.
+    [apps.Messages.notch]
+
+    [apps.Messages.notch.dot]
+    color = "white"                 # a bare dot is quieter than a count
 
     """
 }

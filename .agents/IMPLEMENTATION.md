@@ -153,12 +153,18 @@ ResolvedGlow.builtin  ⊕  [glow]  ⊕  apps.<App>.glow  ⊕  apps.<App>.glow.<c
   bare dot_.
 - **The shelf takes only `enabled` per app**, because the shelf is one shared object on one screen edge:
   a per-app anchor or padding would be several shelves disagreeing about where the shelf is.
-- **The notch takes `enabled` and `color`**, and its resolution is one layer rather than a cascade:
-  `[notch]` describes the strip, an app describes its own indicator, and `color` is the only thing an
-  indicator has of its own — its default is the Dock badge's red, so `notch = {}` is already legible.
-  `style` is deliberately not per-app, for the shelf-anchor reason: indicators disagreeing about their
-  own shape would be several notches. `resolvedNotch(for:badge:)` returns the same three `nil`s, and
-  is also where `count` falls back to a `dot` for a badge that has no digits to draw.
+- **The notch cascades the same way, one level shallower**, because there is no `[notch]` layer to
+  inherit from — `[notch]` describes the *strip* rather than an indicator:
+
+  ```
+  ResolvedNotchItem.defaultColor  ⊕  apps.<App>.notch  ⊕  apps.<App>.notch.<count|dot>
+  ```
+
+  `NotchLayer` is the optional-everything shape and takes the two keys an indicator has of its own,
+  `enabled` and `color`; the built-in floor is the Dock badge's red, so `notch = {}` is already
+  legible. `style` is deliberately not per-app, for the shelf-anchor reason: indicators disagreeing
+  about their own shape would be several notches. `resolvedNotch(for:badge:)` returns the same three
+  `nil`s, and is also where `count` falls back to a `dot` for a badge that has no digits to draw.
 
 `ResolutionTests` covers the whole table, one badge kind at a time.
 
@@ -273,7 +279,7 @@ draws the notch too.
 - **The geometry is public API.** `ScreenTopology.notch(of:standInWidth:)` reads it: the two
   `auxiliaryTop*Area` rects are both absent on a screen without a notch and both present on one with
   it, so their absence is the test and the cutout is the gap between them. There is no public answer
-  for the cutout's corner radius, so `corner-radius` is a config value with a good default.
+  for the cutout's corner radius, so `NotchStrip` carries the one every Mac that has one draws.
 - **`NotchLayout` is the policy** and lives in `PingCore`: `(items, settings)` in, two sides, a tail
   and two widths out. Capacity per side is `floor((max-width − gap) / (item-size + gap))`; `split`
   halves the list in file order and widens both sides to the wider one's width, so an odd number of
@@ -283,7 +289,7 @@ draws the notch too.
 - **One window per display**, `.statusBar` — the floor, because the menu bar's *text* composites above
   anything lower. It is built at the strip's widest and never moved: a window that grew would be asking
   the window server to re-place it over the menu bar sixty times a second.
-- **What moves is one layer.** `NotchLayer` animates the shape's `bounds` and `position` together, so
+- **What moves is one layer.** `NotchStrip` animates the shape's `bounds` and `position` together, so
   the two extensions can differ while the cutout stays put. Its bounds run from −(left extension + half
   the cutout) to +(right extension + half the cutout), so `x = 0` is the cutout's middle whichever side
   is opening — which is what lets an indicator be positioned from the notch rather than from an edge
@@ -492,7 +498,7 @@ Ping/
     │                 ScreenTopology (which screens, and when that changes)
     ├── PingUI/       Glow/{GlowRenderer, GlowWindow, GlowView}
     │                 Shelf/{ShelfRenderer, ShelfWindow, ShelfView}
-    │                 Notch/{NotchRenderer, NotchWindow, NotchLayer}
+    │                 Notch/{NotchRenderer, NotchWindow, NotchStrip}
     │                 Rotator (the shared LRU) · IconCache
     │                 Settings/{SettingsWindow, SettingsModel, SettingsForm, AppsTab, DiagnosticsBar}
     │                 Draft (text ⇄ values) · MenuBar/MenuBarContent · Onboarding/AccessibilityView
@@ -502,7 +508,7 @@ Ping/
 ```
 
 One spelling recurs and is worth recognising: every framework-touching subsystem is a **pure model plus
-a thin AppKit shell** (`Rotator`/`GlowView`, `NotchLayout`/`NotchLayer`, `Draft`/`SettingsModel`,
+a thin AppKit shell** (`Rotator`/`GlowView`, `NotchLayout`/`NotchStrip`, `Draft`/`SettingsModel`,
 `EffectResolver`/the
 renderers), so the interesting half is testable with no window server.
 
@@ -528,7 +534,7 @@ none of it needs a window server.
 - **`PingUITests`** — `DraftTests` for an edit as text, unset-on-default and a refusal that does not
   land; `SettingsModelTests` for the two-editor rules — a clean draft re-reading silently, a dirty one
   reporting a conflict, Save held until it is resolved, and a save not reading as a reload; and
-  `NotchLayerTests` for the arithmetic reaching the screen — in each placement, the innermost indicator
+  `NotchStripTests` for the arithmetic reaching the screen — in each placement, the innermost indicator
   one gap from the cutout in the window's own coordinates, and none of them outside the shape that
   masks them.
 

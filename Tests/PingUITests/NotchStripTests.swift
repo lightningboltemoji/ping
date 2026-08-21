@@ -9,9 +9,9 @@ import Testing
 ///
 /// `NotchLayoutTests` settles how many slots a side is owed; this settles that the slot is where
 /// the eye expects it — one gap from the cutout, inside the shape that is meant to reveal it.
-@Suite("Notch layer")
+@Suite("Notch strip")
 @MainActor
-struct NotchLayerTests {
+struct NotchStripTests {
 
   /// A real cutout, measured: 220 × 38 on a 14" display.
   private let geometry = NotchGeometry(
@@ -38,13 +38,13 @@ struct NotchLayerTests {
   {
     let settings = settings(placement)
     let size = NotchWindow.frame(for: geometry, settings: settings).size
-    let layer = NotchLayer(geometry: geometry, settings: settings, size: size)
+    let strip = NotchStrip(geometry: geometry, settings: settings, size: size)
     let host = CALayer()
     host.frame = CGRect(origin: .zero, size: size)
-    host.addSublayer(layer.shape)
-    layer.show(
+    host.addSublayer(strip.shape)
+    strip.show(
       NotchLayout(items: items(count), settings: settings), turn: nil, icons: IconCache())
-    return (layer.shape, host, settings)
+    return (strip.shape, host, settings)
   }
 
   @Test(

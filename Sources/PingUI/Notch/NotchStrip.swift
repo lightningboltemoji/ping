@@ -1,5 +1,5 @@
 //
-//  NotchLayer.swift
+//  NotchStrip.swift
 //  PingUI
 //
 //  The shape and its indicators. Core Animation rather than SwiftUI: the width morph is the whole
@@ -18,7 +18,11 @@ import PingConfig
 import PingCore
 
 @MainActor
-final class NotchLayer {
+final class NotchStrip {
+
+  /// The cutout's own radius, which no public API answers for and every Mac that has one draws
+  /// the same. A strip that did not match it would read as a second, squarer notch.
+  private static let cornerRadius: Double = 10
 
   /// The strip. Every indicator is a sublayer of it.
   let shape = CALayer()
@@ -42,7 +46,7 @@ final class NotchLayer {
     self.center = CGPoint(x: size.width / 2, y: size.height / 2)
 
     shape.backgroundColor = NSColor.black.cgColor
-    shape.cornerRadius = settings.cornerRadius
+    shape.cornerRadius = Self.cornerRadius
     // It hangs from the top edge, so only the bottom two corners are ever on screen.
     shape.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
     shape.masksToBounds = true

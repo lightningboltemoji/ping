@@ -144,8 +144,61 @@ struct ResolutionTests {
     // Subscribed and opted out, and never subscribed: two different sentences, one `nil`.
     #expect(parsed.resolvedNotch(forAppNamed: "Notes", badge: .count) == nil)
     #expect(parsed.resolvedNotch(forAppNamed: "Reminders", badge: .count) == nil)
-    #expect(parsed.app(named: "Notes")?.notch?.enabled == false)
+    #expect(parsed.app(named: "Notes")?.notch?.base.enabled == false)
     #expect(parsed.app(named: "Reminders")?.notch == nil)
+  }
+
+  @Test("a badge kind picks the notch's colour too, and only for that kind")
+  func notchBadgeKindOverridesApp() throws {
+    let parsed = try config(
+      """
+      [apps.Messages.notch]
+      color = "green"
+
+      [apps.Messages.notch.dot]
+      color = "white"
+      """)
+    #expect(parsed.resolvedNotch(forAppNamed: "Messages", badge: .dot)?.color == .named(.white))
+    #expect(parsed.resolvedNotch(forAppNamed: "Messages", badge: .count)?.color == .named(.green))
+  }
+
+  @Test("`enabled = false` under a badge kind silences only that kind's indicator")
+  func notchBadgeKindOptOut() throws {
+    let parsed = try config(
+      """
+      [apps.Messages.notch]
+      color = "green"
+
+      [apps.Messages.notch.dot]
+      enabled = false
+      """)
+    #expect(parsed.resolvedNotch(forAppNamed: "Messages", badge: .dot) == nil)
+    // And the kind that said nothing still inherits the app's own colour.
+    #expect(parsed.resolvedNotch(forAppNamed: "Messages", badge: .count)?.color == .named(.green))
+  }
+
+  @Test("a badge kind cannot talk its way past an app that opted out")
+  func notchBadgeKindUnderDisabledApp() throws {
+    let parsed = try config(
+      """
+      [apps.Messages.notch]
+      enabled = false
+
+      [apps.Messages.notch.count]
+      color = "white"
+      """)
+    #expect(parsed.resolvedNotch(forAppNamed: "Messages", badge: .count) == nil)
+    // Unless it says so itself: the kind is the last word, the same as it is for the glow.
+    let louder = try config(
+      """
+      [apps.Messages.notch]
+      enabled = false
+
+      [apps.Messages.notch.count]
+      enabled = true
+      """)
+    #expect(louder.resolvedNotch(forAppNamed: "Messages", badge: .count) != nil)
+    #expect(louder.resolvedNotch(forAppNamed: "Messages", badge: .dot) == nil)
   }
 
   @Test("`[notch].enabled = false` empties the strip")

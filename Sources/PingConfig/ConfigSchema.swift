@@ -439,11 +439,6 @@ extension Setting {
       help: "How wide the stand-in notch is on a screen that has none.",
       section: .notch),
     Setting(
-      ["notch", "corner-radius"], \.notch.cornerRadius, .number(0...30, .points),
-      label: "Corner radius",
-      help: "How round the two bottom corners of the strip are.",
-      section: .notch),
-    Setting(
       ["notch", "item-size"], \.notch.itemSize, .number(2...32, .points),
       label: "Item size",
       help: "How large one indicator is drawn.",

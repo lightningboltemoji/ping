@@ -193,19 +193,33 @@ private struct AppDetail: View {
           .font(.caption).foregroundStyle(.secondary)
       }
 
-      if app.glow != nil {
+      if let glow = app.glow {
         Section("Glow") {
-          GlowLayerRows(
-            layer: app.glow?.base ?? GlowLayer(), at: root.appending("glow"), model: model)
+          GlowLayerRows(layer: glow.base, at: root.appending("glow"), model: model)
         }
         ForEach(BadgeKind.allCases, id: \.self) { kind in
-          BadgeKindSection(app: app, kind: kind, model: model)
+          BadgeKindSection(
+            app: app.name, effect: "glow", kind: kind, layer: glow[kind], model: model
+          ) { layer, key in
+            GlowLayerRows(layer: layer, at: key, model: model)
+          }
         }
       }
 
-      if app.notch != nil {
+      if let notch = app.notch {
         Section("Notch") {
-          NotchRows(notch: app.notch ?? AppNotch(), at: root.appending("notch"), model: model)
+          NotchRows(
+            layer: notch.base, inherited: ResolvedNotchItem.defaultColor,
+            at: root.appending("notch"), model: model)
+        }
+        ForEach(BadgeKind.allCases, id: \.self) { kind in
+          BadgeKindSection(
+            app: app.name, effect: "notch", kind: kind, layer: notch[kind], model: model
+          ) { layer, key in
+            NotchRows(
+              layer: layer, inherited: notch.base.color ?? ResolvedNotchItem.defaultColor,
+              at: key, model: model)
+          }
         }
       }
     }
@@ -224,16 +238,18 @@ private struct AppDetail: View {
   }
 }
 
-/// A `count` or `dot` override: the same five keys again, one level deeper.
-private struct BadgeKindSection: View {
-  let app: AppConfig
+/// A `count` or `dot` override: the same keys again, one level deeper. Written once for both
+/// effects, because the glow's cascade and the notch's differ in their keys and in nothing else.
+private struct BadgeKindSection<Layer, Rows: View>: View {
+  let app: String
+  let effect: String
   let kind: BadgeKind
+  /// What this kind overrides, or `nil` when it does not override at all.
+  let layer: Layer?
   @Bindable var model: SettingsModel
+  @ViewBuilder let rows: (Layer, TOMLKey) -> Rows
 
-  private var layer: GlowLayer? {
-    kind == .count ? app.glow?.count : app.glow?.dot
-  }
-  private var key: TOMLKey { ["apps", app.name, "glow", kind.rawValue] }
+  private var key: TOMLKey { ["apps", app, effect, kind.rawValue] }
 
   private var title: String {
     kind == .count ? "When the badge is a number" : "When the badge is a bare dot"
@@ -245,7 +261,7 @@ private struct BadgeKindSection: View {
         Toggle("", isOn: override).labelsHidden()
       }
       if let layer {
-        GlowLayerRows(layer: layer, at: key, model: model)
+        rows(layer, key)
       }
     }
     // While the pointer is in here, the preview badge is this kind — otherwise a `dot` override
@@ -270,30 +286,33 @@ private struct BadgeKindSection: View {
         // TOML will not let `[apps.X.glow.dot]` reopen a `glow = { … }`, so the braces come apart
         // first. Harmless when the file already writes the long form — `expand` leaves a table it
         // does not find between braces alone.
-        model.apply(.expand(["apps", app.name, "glow"]))
+        model.apply(.expand(["apps", app, effect]))
         model.apply(.key(key, .emptyTable()))
       })
   }
 }
 
-/// The two the notch takes per app. `color` is the point of the effect — indicators are told
-/// apart by nothing else — and its default is the Dock badge's own red.
+/// The two keys the notch takes, each of which may also say *nothing* and inherit. `color` is the
+/// point of the effect — indicators are told apart by nothing else.
 private struct NotchRows: View {
-  let notch: AppNotch
+  let layer: NotchLayer
+  /// The colour this level would show if it said nothing, which is also what a newly-written key
+  /// starts at so that turning the row on changes nothing by itself.
+  let inherited: PingColor
   let at: TOMLKey
   @Bindable var model: SettingsModel
 
   var body: some View {
-    InheritableRow(label: "Enabled", isSet: notch.enabled != nil, key: at.appending("enabled")) {
-      Toggle("", isOn: enabled(notch.enabled ?? true)).labelsHidden()
+    InheritableRow(label: "Enabled", isSet: layer.enabled != nil, key: at.appending("enabled")) {
+      Toggle("", isOn: enabled(layer.enabled ?? true)).labelsHidden()
     } write: {
       model.apply(.key(at.appending("enabled"), .bool(true)))
     }
 
-    InheritableRow(label: "Color", isSet: notch.color != nil, key: at.appending("color")) {
-      ColorWell(color: color(notch.color ?? ResolvedNotchItem.defaultColor))
+    InheritableRow(label: "Color", isSet: layer.color != nil, key: at.appending("color")) {
+      ColorWell(color: color(layer.color ?? inherited))
     } write: {
-      model.apply(.key(at.appending("color"), .string(ResolvedNotchItem.defaultColor.written)))
+      model.apply(.key(at.appending("color"), .string(inherited.written)))
     }
   }
 

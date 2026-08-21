@@ -171,13 +171,28 @@ public struct NotchSettings: Equatable, Sendable {
   public var alwaysShow: Bool = false
   /// The stand-in's own width. 185 is the 14" cutout exactly.
   public var width: Double = 185
-  /// No public API answers for the real cutout's radius, so it is a value with a good default.
-  public var cornerRadius: Double = 10
   public var itemSize: Double = 8
   public var gap: Double = 8
   public var growMS: Int = 350
 
   public init() {}
+}
+
+/// One level of the notch cascade: both keys optional, because absent means "inherit"
+/// and that distinction is the whole of the cascade (IMPLEMENTATION.md §4).
+public struct NotchLayer: Equatable, Sendable {
+  public var enabled: Bool?
+  public var color: PingColor?
+
+  public init() {}
+
+  /// `self ⊕ other` — keys written in `other` win, keys absent from it inherit.
+  public func overlaid(with other: NotchLayer) -> NotchLayer {
+    var out = self
+    if let v = other.enabled { out.enabled = v }
+    if let v = other.color { out.color = v }
+    return out
+  }
 }
 
 /// One indicator with every key answered — what a renderer is handed.
@@ -204,9 +219,13 @@ public struct AppGlow: Equatable, Sendable {
 
   public init() {}
 
+  /// What this badge kind writes on its own, or `nil` when it does not override at all.
+  public subscript(kind: BadgeKind) -> GlowLayer? {
+    kind == .count ? count : dot
+  }
+
   public func layer(for kind: BadgeKind) -> GlowLayer {
-    let override = kind == .count ? count : dot
-    return base.overlaid(with: override ?? GlowLayer())
+    base.overlaid(with: self[kind] ?? GlowLayer())
   }
 }
 
@@ -218,15 +237,23 @@ public struct AppShelf: Equatable, Sendable {
   }
 }
 
-/// An app's notch subscription. Only these two: `style` is the strip's own, because indicators
-/// disagreeing about their shape is the same mistake as a per-app shelf anchor.
+/// An app's notch subscription: what it overrides, and what each badge kind overrides on top of
+/// that. Only these two keys: `style` is the strip's own, because indicators disagreeing about
+/// their shape is the same mistake as a per-app shelf anchor.
 public struct AppNotch: Equatable, Sendable {
-  public var enabled: Bool?
-  public var color: PingColor?
+  public var base = NotchLayer()
+  public var count: NotchLayer?
+  public var dot: NotchLayer?
 
-  public init(enabled: Bool? = nil, color: PingColor? = nil) {
-    self.enabled = enabled
-    self.color = color
+  public init() {}
+
+  /// What this badge kind writes on its own, or `nil` when it does not override at all.
+  public subscript(kind: BadgeKind) -> NotchLayer? {
+    kind == .count ? count : dot
+  }
+
+  public func layer(for kind: BadgeKind) -> NotchLayer {
+    base.overlaid(with: self[kind] ?? NotchLayer())
   }
 }
 
@@ -291,13 +318,15 @@ extension Config {
     return appShelf.enabled ?? true
   }
 
-  /// This app's indicator, or `nil` three ways: the master switch is off, the app never
-  /// subscribed, or it subscribed and opted out. The style is the strip's, except that `count`
-  /// has no digits to draw for a bare dot and falls back to one.
+  /// `defaultColor ⊕ apps.A.notch ⊕ apps.A.notch.<kind>`, or `nil` three ways: the master switch
+  /// is off, the app never subscribed, or it subscribed and opted out. The style is the strip's,
+  /// except that `count` has no digits to draw for a bare dot and falls back to one.
   public func resolvedNotch(for app: AppConfig, badge kind: BadgeKind) -> ResolvedNotchItem? {
-    guard notch.enabled, let appNotch = app.notch, appNotch.enabled ?? true else { return nil }
+    guard notch.enabled, let appNotch = app.notch else { return nil }
+    let layer = appNotch.layer(for: kind)
+    guard layer.enabled ?? true else { return nil }
     let style: NotchStyle = notch.style == .count && kind == .dot ? .dot : notch.style
-    return ResolvedNotchItem(color: appNotch.color ?? ResolvedNotchItem.defaultColor, style: style)
+    return ResolvedNotchItem(color: layer.color ?? ResolvedNotchItem.defaultColor, style: style)
   }
 
   public func resolvedNotch(forAppNamed name: String, badge kind: BadgeKind) -> ResolvedNotchItem? {

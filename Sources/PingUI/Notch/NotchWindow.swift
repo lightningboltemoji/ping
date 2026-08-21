@@ -17,7 +17,7 @@ import PingCore
 @MainActor
 final class NotchWindow: NSWindow {
 
-  let strip: NotchLayer
+  let strip: NotchStrip
 
   /// The widest the strip can ever be: the notch, plus the whole budget on each side.
   static func frame(for geometry: NotchGeometry, settings: NotchSettings) -> NSRect {
@@ -29,7 +29,7 @@ final class NotchWindow: NSWindow {
 
   init(geometry: NotchGeometry, settings: NotchSettings) {
     let frame = Self.frame(for: geometry, settings: settings)
-    strip = NotchLayer(geometry: geometry, settings: settings, size: frame.size)
+    strip = NotchStrip(geometry: geometry, settings: settings, size: frame.size)
 
     super.init(
       contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: false)
