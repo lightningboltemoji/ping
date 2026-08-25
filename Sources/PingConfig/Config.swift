@@ -37,9 +37,10 @@ public enum ShelfAnchor: String, CaseIterable, Sendable {
   }
 }
 
-/// Which extension an app's indicator goes in, and therefore which side widens.
+/// Which extension an app's indicator goes in, and therefore which side widens. `mirror` is the
+/// one that answers "both": every indicator drawn twice, so the two extensions are reflections.
 public enum NotchPlacement: String, CaseIterable, Sendable {
-  case left, right, split
+  case left, right, split, mirror
 }
 
 /// What one indicator is drawn as. Three, because that is the whole of Ping's alphabet

@@ -108,13 +108,11 @@ final class NotchStrip {
     indicators = []
 
     for side in NotchSide.allCases {
-      let slots = layout.slots(on: side)
-      for (slot, item) in layout.items(on: side).enumerated() {
-        add(item, at: slot, on: side, of: slots, icons: icons)
-      }
-      // The tail's slot is the last one, and whichever of them is currently taking a turn in it.
-      if layout.overflowSide == side, let turn {
-        add(turn, at: slots - 1, on: side, of: slots, icons: icons)
+      let contents = layout.contents(on: side)
+      for (slot, item) in contents.enumerated() {
+        // The tail's slot holds whichever of them is currently taking a turn in it.
+        guard let item = item ?? turn else { continue }
+        add(item, at: slot, on: side, of: contents.count, icons: icons)
       }
     }
     CATransaction.commit()
@@ -130,8 +128,8 @@ final class NotchStrip {
     indicators.append(indicator)
   }
 
-  /// Slots are packed against the notch and counted in reading order, so the left extension's
-  /// last slot is the one beside the cutout and the right extension's first one is.
+  /// Slots are packed against the notch and numbered left to right, so the left extension's last
+  /// slot is the one beside the cutout and the right extension's first one is.
   private func x(of slot: Int, on side: NotchSide, of slots: Int) -> Double {
     let pitch = settings.itemSize + settings.gap
     let inner = geometry.rect.width / 2 + settings.gap + settings.itemSize / 2

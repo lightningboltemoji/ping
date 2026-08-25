@@ -46,7 +46,7 @@ public enum ConfigExample {
     # ─── Notch — indicators in a strip that grows out of the notch ────────
     [notch]
     enabled       = true            # master switch for the whole effect
-    placement     = "split"         # "left" | "right" | "split"
+    placement     = "split"         # "left" | "right" | "split" | "mirror"
     style         = "dot"           # "dot" | "icon" | "count"
     max-width     = 120             # extra px per side; past this the tail takes turns
     always-show   = false           # a stand-in notch on a screen without one

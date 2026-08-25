@@ -67,13 +67,26 @@ struct NotchStripTests {
     }
   }
 
+  @Test("`mirror` puts every indicator at the reflection of its own position")
+  func mirrored() {
+    let (shape, host, _) = strip(.mirror, showing: 4)
+    let middle = Double(host.bounds.midX)
+    let centres = (shape.sublayers ?? []).map { Double(host.convert($0.frame, from: shape).midX) }
+    let left = centres.filter { $0 < middle }.sorted().map { middle - $0 }
+    let right = centres.filter { $0 > middle }.sorted().map { $0 - middle }
+    #expect(left.count == 4)
+    // Both read outward-in, so the outermost on the left pairs with the outermost on the right.
+    #expect(left == right.reversed())
+  }
+
   @Test(
     "the shape opens wide enough to show every indicator in it",
     arguments: NotchPlacement.allCases)
   func nothingIsClipped(_ placement: NotchPlacement) {
     let (shape, _, _) = strip(placement, showing: 4)
     let indicators = shape.sublayers ?? []
-    #expect(indicators.count == 4)
+    // `mirror` draws each of them twice, once per extension.
+    #expect(indicators.count == (placement == .mirror ? 8 : 4))
     // `masksToBounds` is on, so an indicator outside these bounds is one the user never sees.
     for indicator in indicators {
       #expect(shape.bounds.contains(indicator.frame))

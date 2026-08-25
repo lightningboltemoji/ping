@@ -281,11 +281,15 @@ draws the notch too.
   it, so their absence is the test and the cutout is the gap between them. There is no public answer
   for the cutout's corner radius, so `NotchStrip` carries the one every Mac that has one draws.
 - **`NotchLayout` is the policy** and lives in `PingCore`: `(items, settings)` in, two sides, a tail
-  and two widths out. Capacity per side is `floor((max-width − gap) / (item-size + gap))`; `split`
-  halves the list in file order and widens both sides to the wider one's width, so an odd number of
-  indicators does not tip the notch. The tail that does not fit takes turns in the last slot
-  (`PRINCIPLES.md §3`) on `NotchRenderer`'s own clock, because a badge that does not change produces
-  no render to ride on.
+  and two widths out — and `contents(on:)`, each side's slots in order, so the strip is handed what
+  goes where rather than deriving it. Capacity per side is
+  `floor((max-width − gap) / (item-size + gap))`; `split` halves the list in file order across the
+  two budgets and `mirror` spends them on two copies of it, the right one reflected so both
+  extensions read outward-in. Both widen the two sides to the wider one's width, so an odd number of
+  indicators does not tip the notch. The tail that does not fit takes turns in the last slot of the
+  side the list ends in (`PRINCIPLES.md §3`) on `NotchRenderer`'s own clock, because a badge that
+  does not change produces no render to ride on; under `mirror` that slot is the one against the
+  cutout on each side, so the reflection holds while it changes hands.
 - **One window per display**, `.statusBar` — the floor, because the menu bar's *text* composites above
   anything lower. It is built at the strip's widest and never moved: a window that grew would be asking
   the window server to re-place it over the menu bar sixty times a second.
@@ -529,14 +533,14 @@ none of it needs a window server.
   the screen: only badged apps, an unmentioned app rendering nothing, the shelf and the notch being
   absent rather than empty, snooze, acknowledgement, focus suppression, `bundle-id` matching, and a
   preview standing in for the live snapshot while ignoring every suppression; and `NotchLayoutTests`
-  for the strip's arithmetic — capacity, the three placements, the split's equal-width rule, and a tail
-  that overflows rather than being dropped.
+  for the strip's arithmetic — capacity, the four placements, the equal-width rule `split` and `mirror`
+  share, and a tail that overflows rather than being dropped.
 - **`PingUITests`** — `DraftTests` for an edit as text, unset-on-default and a refusal that does not
   land; `SettingsModelTests` for the two-editor rules — a clean draft re-reading silently, a dirty one
   reporting a conflict, Save held until it is resolved, and a save not reading as a reload; and
   `NotchStripTests` for the arithmetic reaching the screen — in each placement, the innermost indicator
-  one gap from the cutout in the window's own coordinates, and none of them outside the shape that
-  masks them.
+  one gap from the cutout in the window's own coordinates, none of them outside the shape that masks
+  them, and under `mirror` every one of them at the reflection of its own position.
 
 **What the suite does not cover**, and therefore needs the app actually running: anything about the
 window server (which space a window is on, whether an overlay survives a full-screen app), anything

@@ -72,7 +72,7 @@ struct NotchLayoutTests {
     // Six keep a slot of their own; the last of the seven is shared by the rest.
     #expect(names(layout.left) == names(items(6)))
     #expect(names(layout.overflow) == ["App 6", "App 7", "App 8", "App 9"])
-    #expect(layout.overflowSide == .left)
+    #expect(layout.overflowSlots == [.left: 6])
     #expect(layout.slots(on: .left) == 7)
     #expect(layout.leftWidth == 120)
   }
@@ -83,9 +83,36 @@ struct NotchLayoutTests {
     #expect(layout.left.count == 7)
     #expect(layout.right.count == 6)
     #expect(names(layout.overflow) == names(items(20).suffix(7)))
-    #expect(layout.overflowSide == .right)
+    #expect(layout.overflowSlots == [.right: 6])
     #expect(layout.slots(on: .left) == layout.slots(on: .right))
     #expect(layout.leftWidth == layout.rightWidth)
+  }
+
+  @Test("`mirror` draws the whole list on both sides, the right one reflected")
+  func mirror() {
+    let layout = NotchLayout(items: items(3), settings: settings(placement: .mirror))
+    #expect(names(layout.left) == ["App 0", "App 1", "App 2"])
+    // Slot order runs left to right, so a reflection of the list is the list backwards.
+    #expect(names(layout.right) == ["App 2", "App 1", "App 0"])
+    #expect(layout.leftWidth == layout.rightWidth)
+    #expect(layout.leftWidth == 8 + 3 * 16)
+  }
+
+  @Test("`mirror` spends the two budgets on two copies, and shares the slot at the cutout")
+  func overflowUnderMirror() {
+    let layout = NotchLayout(items: items(10), settings: settings(placement: .mirror))
+    // Seven slots per side, both spent on the same six indicators and one shared slot.
+    #expect(names(layout.left) == names(items(6)))
+    #expect(names(layout.right) == names(items(6)).reversed())
+    #expect(names(layout.overflow) == ["App 6", "App 7", "App 8", "App 9"])
+    // The tail takes the slot against the cutout on each side, which is where the reading ends.
+    #expect(layout.overflowSlots == [.left: 6, .right: 0])
+    let left: [String?] = names(items(6)) + [nil]
+    let right: [String?] = [nil] + names(items(6)).reversed()
+    #expect(layout.contents(on: .left).map { $0?.appName } == left)
+    #expect(layout.contents(on: .right).map { $0?.appName } == right)
+    #expect(layout.leftWidth == 120)
+    #expect(layout.rightWidth == 120)
   }
 
   @Test("nothing badged is a strip at rest, not a strip of nothing")
@@ -93,7 +120,7 @@ struct NotchLayoutTests {
     let layout = NotchLayout(items: [], settings: settings())
     #expect(layout.left.isEmpty)
     #expect(layout.right.isEmpty)
-    #expect(layout.overflowSide == nil)
+    #expect(layout.overflowSlots.isEmpty)
     #expect(layout.leftWidth == 0)
     #expect(layout.rightWidth == 0)
   }

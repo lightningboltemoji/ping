@@ -416,7 +416,7 @@ extension Setting {
     Setting(
       ["notch", "placement"], \.notch.placement, .word,
       label: "Placement",
-      help: "Which side of the notch the indicators hang in.",
+      help: "Which side of the notch the indicators hang in, or both, reflected.",
       section: .notch),
     Setting(
       ["notch", "style"], \.notch.style, .word,
