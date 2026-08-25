@@ -74,20 +74,6 @@ app: build
 build:
 	@echo "Building Ping ($(CONFIG))..."
 	$(SWIFT_BUILD)
-	@# SwiftPM's generated accessor looks for the resource bundle beside Bundle.main.bundleURL —
-	@# the .app root, where codesigning will not have it. Point it at resourceURL instead and
-	@# rebuild. Newer toolchains already prefer resourceURL, so this is a no-op there.
-	@patched=0; \
-	for accessor in $$(find .build -name resource_bundle_accessor.swift); do \
-		if ! grep -q 'Bundle\.main\.resourceURL' "$$accessor"; then \
-			sed -i '' 's/Bundle\.main\.bundleURL/(Bundle.main.resourceURL ?? Bundle.main.bundleURL)/' "$$accessor"; \
-			patched=1; \
-		fi; \
-	done; \
-	if [ "$$patched" = 1 ]; then \
-		echo "Patched resource bundle accessor, rebuilding..."; \
-		$(SWIFT_BUILD); \
-	fi
 
 # The unbundled CLI's path — the better symlink target while working on it, since it tracks
 # `make build` rather than the last bundle.

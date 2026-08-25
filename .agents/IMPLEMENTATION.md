@@ -554,6 +554,11 @@ into `/Applications`, or `INSTALL_DIR`) · `make dist` · `make lint`.
   `ping-dot-app` rides along beside it so there is exactly one copy of the config reader on the machine
   and no chance of a CLI and an app from different builds disagreeing about what the file means. Nothing
   puts it on `$PATH` — that is a cask's `binary` stanza, or a symlink you make.
+- **The resource bundle is found by search, not by `Bundle.module`.** `make app` installs
+  `Ping_PingUI.bundle` into `Contents/Resources`, and `PingResources` looks for it there, in a test
+  bundle, and beside the binary in `.build` — the three places Ping runs from. SwiftPM's generated
+  accessor is unused because which version of it a toolchain writes decides where it looks, and one of
+  them looks only beside the executable, which inside a bundle is `Contents/MacOS`.
 - **`LSUIElement`** — Ping is a menu bar agent with no Dock tile of its own. Launch-at-login is
   `SMAppService.mainApp`, and the file wins on load: the config is read and the service is synced to it.
 - **TCC records a grant against the code signature of what runs.** Ad-hoc signing identifies the app by

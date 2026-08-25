@@ -9,7 +9,25 @@ import AppKit
 import Foundation
 
 public enum PingResources {
-  public static let bundle = Bundle.module
+  /// SwiftPM's resource bundle for `PingUI`, searched for rather than reached through the generated
+  /// `Bundle.module`, whose shape — and so where it looks — is the toolchain's choice. The three
+  /// roots are every layout Ping runs in: the `.app`, a test bundle, and the binary's own directory.
+  public static let bundle: Bundle = {
+    let name = "Ping_PingUI"
+    let roots = [
+      Bundle.main.resourceURL,
+      Bundle(for: Anchor.self).resourceURL,
+      Bundle.main.bundleURL,
+    ]
+    for root in roots.compactMap({ $0?.appendingPathComponent(name + ".bundle") }) {
+      if let bundle = Bundle(url: root) { return bundle }
+    }
+    // `preconditionFailure` would trap without the message under `-O`.
+    fatalError("\(name).bundle is in none of: \(roots.compactMap { $0?.path })")
+  }()
+
+  /// `Bundle(for:)` needs a class from this target to read a bundle off; that is Anchor's whole use.
+  private final class Anchor {}
 
   /// The menu bar bell, as a template image so it follows the menu bar's own appearance.
   public static var menuBarIcon: NSImage {
