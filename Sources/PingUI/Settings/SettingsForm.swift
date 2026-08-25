@@ -57,6 +57,8 @@ struct SettingRow: View {
     case .number(let bound, let unit):
       LabeledContent {
         HStack(spacing: 8) {
+          // Continuous, and snapped on the way out: `step:` would have AppKit draw a tick per
+          // detent, which is a scale at a dozen of them and hatching at six hundred.
           Slider(value: numberBinding(bound), in: bound.lowerBound...bound.upperBound)
             .frame(minWidth: 140)
           Text(reading(bound, unit))
@@ -118,7 +120,7 @@ struct SettingRow: View {
   private func numberBinding(_ bound: Setting.Bound) -> Binding<Double> {
     Binding(
       get: { model.value(of: setting).asDouble ?? bound.lowerBound },
-      set: { model.set(setting, to: .number(bound.isIntegral ? $0.rounded() : $0)) })
+      set: { model.set(setting, to: .number(bound.snapping($0))) })
   }
 
   private var stringBinding: Binding<String> {
@@ -186,12 +188,24 @@ struct ColorWell: View {
 struct NumberRow: View {
   @Binding var value: Double
   let range: ClosedRange<Double>
-  var isIntegral = false
+  /// The increment the slider moves by, which is also how many digits the reading carries — the
+  /// two disagreeing is what produces a thumb that stops at 182.55 px.
+  let step: Double
   var unit: String = ""
+
+  private var isIntegral: Bool { step == step.rounded() }
+
+  /// The slider is continuous and its value snapped on the way out, for the reason `SettingRow`'s
+  /// is: `step:` would have AppKit hatch the track with one tick per detent.
+  private var snapped: Binding<Double> {
+    Binding(
+      get: { value },
+      set: { value = min(max(($0 / step).rounded() * step, range.lowerBound), range.upperBound) })
+  }
 
   var body: some View {
     HStack(spacing: 8) {
-      Slider(value: $value, in: range).frame(minWidth: 120)
+      Slider(value: snapped, in: range).frame(minWidth: 120)
       Text(String(format: isIntegral ? "%.0f" : "%.2f", value) + (unit.isEmpty ? "" : " \(unit)"))
         .font(.body.monospacedDigit())
         .foregroundStyle(.secondary)

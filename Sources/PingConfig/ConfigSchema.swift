@@ -117,13 +117,25 @@ extension Setting {
   public struct Bound: Equatable, Sendable {
     public let lowerBound: Double
     public let upperBound: Double
-    /// Whether the number is counted in whole units. A poll interval of 250.5ms is not a thing.
-    public let isIntegral: Bool
+    /// The increment the number is counted in: a slider's detent, and how many digits a reading
+    /// carries. A screen has no half point, so a maximum width of 182.55 is precision the setting
+    /// does not have.
+    public let step: Double
 
-    init(_ range: ClosedRange<Double>, isIntegral: Bool = false) {
+    init(_ range: ClosedRange<Double>, step: Double) {
       self.lowerBound = range.lowerBound
       self.upperBound = range.upperBound
-      self.isIntegral = isIntegral
+      self.step = step
+    }
+
+    /// Whether the number is counted in whole units. A poll interval of 250.5ms is not a thing.
+    public var isIntegral: Bool { step == step.rounded() }
+
+    /// `number` at the nearest value the setting can actually hold. What a control writes, whatever
+    /// a continuous slider handed it — a bound whose ends are not themselves a whole number of
+    /// steps still gets an answer inside itself.
+    public func snapping(_ number: Double) -> Double {
+      min(max((number / step).rounded() * step, lowerBound), upperBound)
     }
 
     var range: ClosedRange<Double> { lowerBound...upperBound }
@@ -196,6 +208,16 @@ extension Setting.Unit {
     case .bare: ""
     }
   }
+
+  /// The increment a number counted in this unit moves by — whole points, tens of milliseconds,
+  /// twentieths of a ratio. A granularity belongs to the unit, not to the effect it is used in.
+  var step: Double {
+    switch self {
+    case .points: 1
+    case .milliseconds: 10
+    case .bare: 0.05
+    }
+  }
 }
 
 //
@@ -221,7 +243,7 @@ extension Codec where Value == Bool {
 
 extension Codec where Value == Double {
   static func number(_ range: ClosedRange<Double>, _ unit: Setting.Unit) -> Codec {
-    let bound = Setting.Bound(range)
+    let bound = Setting.Bound(range, step: unit.step)
     return Codec(
       kind: .number(bound, unit: unit),
       read: { try $0.number($1, in: bound.range) },
@@ -232,7 +254,9 @@ extension Codec where Value == Double {
 extension Codec where Value == Int {
   /// A count. Bounded at both ends and whole, which is what separates a poll interval from a ratio.
   static func count(_ range: ClosedRange<Int>, _ unit: Setting.Unit) -> Codec {
-    let bound = Setting.Bound(Double(range.lowerBound)...Double(range.upperBound), isIntegral: true)
+    // A count is whole whatever it is counted in, so a ratio's twentieth cannot reach it.
+    let bound = Setting.Bound(
+      Double(range.lowerBound)...Double(range.upperBound), step: max(1, unit.step))
     return Codec(
       kind: .number(bound, unit: unit),
       read: { try $0.integer($1, in: range) },

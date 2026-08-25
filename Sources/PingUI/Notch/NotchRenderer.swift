@@ -21,7 +21,7 @@ public final class NotchRenderer {
   private static let turnInterval = Duration.seconds(3)
 
   private var windows: [CGDirectDisplayID: NotchWindow] = [:]
-  private let icons = IconCache()
+  private let icons = IconCache.shared
   private var settings: NotchSettings?
   private var rotator = Rotator<NotchItem>()
   private var turn: Task<Void, Never>?

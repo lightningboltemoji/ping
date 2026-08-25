@@ -6,7 +6,7 @@ For example, with the Messages app set to glow green, and the Mail app set to gl
 
 <img width="600" alt="Video of the plugin clearing an unsent message from the chatbox" src="/.github/preview.webp"/>
 
-## Configuration
+## Config
 
 Ping uses `~/.config/ping/ping.toml` to store all app-specific visualization rules.
 
@@ -48,6 +48,16 @@ glow.size
 ```
 
 Settings can also be changed via GUI using `Settings` in the menu bar.
+
+## Install
+
+[Homebrew](https://brew.sh) is recommended:
+
+```bash
+brew install --cask lightningboltemoji/tap/ping
+```
+
+or manually from the [releases page](https://github.com/lightningboltemoji/Ping/releases).
 
 ## Building
 

@@ -13,7 +13,7 @@ import PingCore
 public final class ShelfRenderer {
 
   private var windows: [CGDirectDisplayID: ShelfWindow] = [:]
-  private let icons = IconCache()
+  private let icons = IconCache.shared
   private var geometry: (anchor: ShelfAnchor, margin: Double)?
   private var last = RenderState()
 

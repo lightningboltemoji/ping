@@ -358,6 +358,9 @@ means taking the line out.
 - **Numbers are refused, never clamped**, with the bound in the message: a slider that cannot reach a
   value beats a file that does not mean what it says. A `camelCase` enum spelling is accepted with a
   diagnostic naming the spelling it moved to — leniency a file gets and a control does not need.
+- **A number's granularity belongs to its unit.** A `Bound` carries the step the value is counted in —
+  whole points, tens of milliseconds, twentieths of a ratio — which is what a control snaps to and how
+  many digits its reading carries. There is no such thing as a maximum width of 182.55 points.
 
 ### 8.3 The document — `ConfigDocument.swift`
 
@@ -433,9 +436,23 @@ badge-kind override needs the braces taken apart before it can be written at all
 - **Unsaved edits survive being closed and reopened.** A window that was shut is not an edit session
   that was abandoned; discarding is a button.
 - **Every tab but one is the schema walked** (`SettingsForm` builds one control per `Kind`), and that
-  one is `AppsTab`, hand-written for the open tree. Its controls are three-state where the others are two: a
-  row either says something or defers, and "defers" has to be reachable, or a per-app colour could be
-  set and never unset.
+  one is `AppsTab`, hand-written for the open tree. Its _value_ rows are three-state where the others
+  are two: a row either says something or defers, and "defers" has to be reachable, or a per-app colour
+  could be set and never unset.
+- **A row offers to defer only where there is something above it.** An app's own notch colour has
+  nothing but the built-in red over it — `[notch]` describes the strip and carries no colour — so that
+  row is a well with no checkbox, and choosing the red is what takes the line out. Under a badge kind
+  the same row does defer, because the app's own colour is there to defer to.
+- **Whether an effect applies is one switch, not two.** An app has a single control per effect, which
+  is its subscription and its `enabled` together — the two are the same sentence at that level, and a
+  file that opts out with `enabled = false` reads as off rather than as a switch contradicting itself.
+  A badge kind keeps a switch of its own, because opting a bare dot out of an effect its app is signed
+  up for (§4) is the one thing no other control in the panel can say.
+- **A row is allowed to be blank, and the file has no line for one that is.** An app subscribed to no
+  effect is not a configuration: picking one from the Dock opens a row to answer that question in and
+  writes nothing, and unticking an app's last effect leaves its row where it was rather than taking it
+  out from under the pointer mid-edit. Blank rows are the panel's own state rather than the draft's,
+  there may be several, they outlive moving between apps, and `−` is what takes one away.
 
 ---
 

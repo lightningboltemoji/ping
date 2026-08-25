@@ -165,6 +165,18 @@ struct DraftTests {
     #expect(draft.rendered.contains("[apps.Slack.glow.dot]"))
   }
 
+  /// The app panel's one switch per effect: an app that opted out with `enabled = false` reads as
+  /// off, and switching it back on takes that line out rather than writing `true` beside it.
+  @Test("an app's opt-out is removed from between its braces, not answered")
+  func optOutIsRemoved() throws {
+    var draft = try Draft("[apps.Slack]\nglow = { enabled = false, color = \"blue\" }\n")
+    draft.apply(.unset(["apps", "Slack", "glow", "enabled"]))
+    #expect(draft.refusal == nil)
+    #expect(draft.config.app(named: "Slack")?.glow?.base.enabled == nil)
+    #expect(draft.config.app(named: "Slack")?.glow?.base.color == .named(.blue))
+    #expect(draft.rendered == "[apps.Slack]\nglow = { color = \"blue\" }\n")
+  }
+
   @Test("discard goes back to the file as it was opened")
   func discard() throws {
     var draft = try Draft(file)
