@@ -50,7 +50,7 @@ Three invariants hold this together:
 
 ## 2. The loops
 
-`AppDelegate` (`Sources/Ping/AppDelegate.swift`) is the whole of the wiring: four `Task`s, each draining
+`AppDelegate` (`Sources/Ping/AppDelegate.swift`) is the whole of the wiring: five `Task`s, each draining
 one `AsyncStream`, plus one notification observer. There is no observation re-arming anywhere.
 
 | Loop         | Source                                    | Does                                                       |
@@ -59,8 +59,9 @@ one `AsyncStream`, plus one notification observer. There is no observation re-ar
 | **poll**     | `BadgeMonitor.snapshots(interval:)`       | `engine.apply(snapshot)` — folds the reading in, ages acknowledgements |
 | **screens**  | `ScreenTopology.changes()`                | every renderer drops its windows and rebuilds               |
 | **config**   | `ConfigLoader.changes()`                  | `engine.apply(result)`, then syncs launch-at-login          |
+| **watch**    | `Observations { engine.dockStatus }`      | dedupes on `!=`, then `watch.publish(status.line)` (§10)    |
 
-Two things outside the four:
+Two things outside the five:
 
 - **Frontmost app** arrives as an `NSWorkspace.didActivateApplicationNotification` observer rather than a
   stream, because it carries its answer in `userInfo` and there is nothing to poll. It writes two fields
@@ -81,7 +82,7 @@ count ticking under its ceiling — reaches no renderer.
 
 ## 3. Module graph & where things go
 
-Three library targets and two executables. Dependencies point strictly upward.
+Four library targets and two executables. Dependencies point strictly upward.
 
 ```
 PingConfig    pure — no AppKit, no NSColor: the TOML grammar, the schema table, the
@@ -93,8 +94,11 @@ PingCore      AppKit for AX and NSScreen only — dock reading, badge state, run
 PingUI        SwiftUI/AppKit — the effect windows and renderers, the settings window,
     │         the menu bar, onboarding, resources.          (deps: PingConfig, PingCore)
     ▲
-   ├── PingApp        executable — @main; the four loops.      (deps: all three)
-   └── ping-dot-app   executable — validate/explain.           (deps: PingConfig only)
+   ├── PingApp        executable — @main; the five loops.      (deps: all four)
+   └── ping-dot-app   executable — validate/explain/watch.     (deps: PingConfig, PingWatch)
+
+PingWatch     Foundation and Darwin only — the `watch` socket: its path, the server the app
+              publishes on, the client the CLI dials.                     (zero deps)
 ```
 
 Each boundary buys one enforced property:
@@ -107,8 +111,12 @@ Each boundary buys one enforced property:
   Cocoa` or the string `NSColor`.
 - **`PingCore` may reach AppKit, but only for AX and `NSScreen`.** The same fence forbids it SwiftUI and
   `NSColor`. This is the target that talks to the system and still deals in values.
-- **`ping-dot-app` depends on `PingConfig` alone.** No AX, no AppKit, no engine — so it launches fast,
-  and everything with logic in it is in a library a test can import.
+- **`ping-dot-app` depends on `PingConfig` and `PingWatch`.** No AX, no AppKit, no engine — so it
+  launches fast, and everything with logic in it is in a library a test can import. `watch` asks the
+  running app rather than reading the Dock, so the CLI needs no Accessibility grant, and neither does
+  whatever runs it.
+- **`PingWatch` imports Foundation and Darwin and nothing else**, because the CLI links it. The same
+  fence test holds it there.
 - **Neither executable product is named for what it becomes.** `PingApp` becomes
   `Contents/MacOS/Ping`, because a product named `Ping` would collide with `ping` in the bin directory
   on a case-insensitive filesystem. `ping-dot-app` is a CLI name macOS has not already taken; it prints
@@ -122,6 +130,7 @@ Each boundary buys one enforced property:
 | decides _what should be on screen_                        | `PingCore/EffectResolver` |
 | is a system reading — the Dock, the screens, the file      | `PingCore`              |
 | is how something is _drawn_ or edited                     | `PingUI`                |
+| crosses the `watch` socket as bytes                        | `PingWatch`             |
 | only wires things together                                | `Sources/Ping/AppDelegate.swift` |
 
 If a decision needs a system answer _and_ a policy, split it: `PingCore` reports the fact as a value and
@@ -458,13 +467,35 @@ badge-kind override needs the braces taken apart before it can be written at all
 
 ## 10. The CLI
 
-`ping-dot-app`, two verbs, both over `PingConfig` alone.
+`ping-dot-app`, three verbs: two over `PingConfig` alone, and one that asks the running app.
 
 - **`validate [path]`** — exit 0, or exit 1 with `path:line: message` on stderr. Diagnostics go to
   stderr and do not fail the run. A missing file is valid: it means every default.
 - **`explain [key]`** — what a key means, what it may be set to, and what it is when the file says
   nothing, printed off `Setting.all`. A whole table is as good an argument as one key, because
   `explain glow` is the question somebody actually has.
+- **`watch`** — the running app's reading of the Dock, one JSON line per change, the current one
+  first. Exit 69 (`EX_UNAVAILABLE`) when nothing is listening and 1 when the app goes, so whatever
+  supervises it — a bar's `exec` — restarts it with backoff.
+
+**A line is a `DockStatus`** (`PingCore/DockStatus.swift`): `version`, `snoozed`, and `apps` — every
+application in the Dock, sorted by title, with `name`, `badge` (the Dock's own spelling: null, `""`,
+digits, or a word), `count` (only when `badge` is digits), `acknowledged` (`RuntimeState.isCovered`'s
+answer) and `path`. Two rules keep it honest for a reader that merges each line into the last:
+
+- **Every key, always**, nulls included, so a badge that went away is said to be gone.
+- **`apps` is an array**, so a merge replaces it whole and an app that left the Dock leaves.
+
+It is built from the live snapshot and `RuntimeState` — never the config, never a preview's stand-ins —
+so an app the file does not mention is published like any other.
+
+**The socket** (`PingWatch`) is `$TMPDIR/ping.sock`, created `0600`. A connection is a watcher: it is
+sent the latest line on arrival and every line after, and nothing it writes is read, so a read that
+returns nothing is it leaving. **Latest wins** per watcher: a line already begun is finished, since a
+torn line is a broken reading, and one still waiting is replaced by a newer one, so a watcher that
+stops reading never holds up the others. `start` refuses a path a live Ping holds, or anything there
+that is not this user's socket, and replaces a socket file a crash left behind. A Ping that cannot
+take the socket still does everything else.
 
 Everything it prints about itself is built from `argv[0]`, so a symlink named `ping` says `ping`.
 
@@ -483,7 +514,8 @@ Everything it prints about itself is built from `argv[0]`, so a symlink named `p
 - **Every application item is read, not only the configured ones**, so a `BadgeSnapshot` is a fact about
   the Dock rather than about the config — which is what lets the settings picker offer titles the file
   has never mentioned.
-- **Two environment overrides, both for testing.** `PING_CONFIG` moves the config file.
+- **Three environment overrides, all for testing.** `PING_CONFIG` moves the config file, and
+  `PING_SOCKET` the `watch` socket.
   `BADGES` is a JSON array of `{"appName": "Slack", "badge": "3", "at": 5}` applied on top of each
   reading, where `at` is seconds after launch and a null badge clears one — which is how the renderers
   get exercised without waiting for a real notification.
@@ -515,6 +547,7 @@ Ping/
     │                 RuntimeState (snooze · acknowledgement · frontmost · preview)
     │                 EffectPreview · EffectResolver (THE decision) · RenderState
     │                 NotchLayout (where the indicators go, as arithmetic)
+    │                 DockStatus (what `watch` publishes)
     │                 EffectEngine (the one observable) · ConfigLoader (+ ConfigWatcher)
     │                 ScreenTopology (which screens, and when that changes)
     ├── PingUI/       Glow/{GlowRenderer, GlowWindow, GlowView}
@@ -524,8 +557,9 @@ Ping/
     │                 Settings/{SettingsWindow, SettingsModel, SettingsForm, AppsTab, DiagnosticsBar}
     │                 Draft (text ⇄ values) · MenuBar/MenuBarContent · Onboarding/AccessibilityView
     │                 Color (the one NSColor) · FontLoader · PingResources · Resources/
-    ├── Ping/         PingApp (@main, the scenes) · AppDelegate (the four loops)
-    └── PingCLI/      main.swift — validate · explain
+    ├── PingWatch/    WatchSocket (the path) · WatchServer (the app's half) · WatchClient (the CLI's)
+    ├── Ping/         PingApp (@main, the scenes) · AppDelegate (the five loops)
+    └── PingCLI/      main.swift — validate · explain · watch
 ```
 
 One spelling recurs and is worth recognising: every framework-touching subsystem is a **pure model plus
@@ -551,7 +585,13 @@ none of it needs a window server.
   absent rather than empty, snooze, acknowledgement, focus suppression, `bundle-id` matching, and a
   preview standing in for the live snapshot while ignoring every suppression; and `NotchLayoutTests`
   for the strip's arithmetic — capacity, the four placements, the equal-width rule `split` and `mirror`
-  share, and a tail that overflows rather than being dropped.
+  share, and a tail that overflows rather than being dropped; and `DockStatusTests` for what `watch`
+  publishes — every Dock app, a word kept as spelled, the resolver's own acknowledgement, and the line
+  itself byte for byte.
+- **`PingWatchTests`** — the socket over real sockets: the current line first and every one after,
+  nothing listening as `unavailable`, the app leaving as the stream ending, a live path refused and a
+  crashed one replaced, and a watcher that stops reading skipping to the newest line without ever
+  being sent half of one.
 - **`PingUITests`** — `DraftTests` for an edit as text, unset-on-default and a refusal that does not
   land; `SettingsModelTests` for the two-editor rules — a clean draft re-reading silently, a dirty one
   reporting a conflict, Save held until it is resolved, and a save not reading as a reload; and

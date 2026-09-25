@@ -13,6 +13,9 @@ import PackageDescription
 //        ▲
 //   PingApp (@main)  ·  ping-dot-app (CLI)
 //
+//   PingWatch   — no AppKit, no deps: the `watch` socket, both ends. The app publishes on
+//                 it and the CLI dials it, so the CLI never links the Dock reader.
+//
 // Neither executable product is named for what it becomes. The app's is `PingApp`, which
 // the Makefile copies into the bundle as Contents/MacOS/Ping — what CFBundleExecutable
 // names. Naming the product `Ping` outright would not survive a case-insensitive
@@ -36,6 +39,7 @@ let package = Package(
   targets: [
     .target(name: "PingConfig"),
     .target(name: "PingCore", dependencies: ["PingConfig"]),
+    .target(name: "PingWatch"),
     .target(
       name: "PingUI",
       dependencies: ["PingConfig", "PingCore"],
@@ -48,14 +52,15 @@ let package = Package(
       ]),
     .executableTarget(
       name: "PingCLI",
-      dependencies: ["PingConfig"],
+      dependencies: ["PingConfig", "PingWatch"],
       path: "Sources/PingCLI"),
     .executableTarget(
       name: "PingApp",
-      dependencies: ["PingConfig", "PingCore", "PingUI"],
+      dependencies: ["PingConfig", "PingCore", "PingUI", "PingWatch"],
       path: "Sources/Ping"),
     .testTarget(name: "PingConfigTests", dependencies: ["PingConfig"]),
     .testTarget(name: "PingCoreTests", dependencies: ["PingCore"]),
     .testTarget(name: "PingUITests", dependencies: ["PingUI"]),
+    .testTarget(name: "PingWatchTests", dependencies: ["PingWatch"]),
   ]
 )

@@ -20,7 +20,8 @@ door. The investigation, the rejected alternative and the number that settled an
 - **The Dock is the sensor.** Ping never sees a notification. It sees what the Dock is showing about an
   app, once per poll, and everything on screen is a function of that reading, the config file, and what
   the user last clicked.
-- **The alphabet is three symbols per app: nothing, a bare dot, a count.** No sender, no content, no
+- **The alphabet is three symbols per app: nothing, a bare dot, a count.** A word an app writes on its
+  badge (`!`, `New`) is drawn as a dot and kept as the Dock spelled it. No sender, no content, no
   timestamp, no per-notification identity — the Dock does not have those to give. **Scope is bounded by
   the sensor**: anything needing to know what a notification _said_ cannot be built here, and that is a
   keep/cut test for a feature request rather than a shortcoming to apologise for.
@@ -45,8 +46,8 @@ none of it may become load-bearing for the first.
 macOS publishes no system-wide notification state. `UNUserNotificationCenter` answers only for the
 process that asks it, and there is no public route to "which applications are unread". The Dock renders
 that answer for everybody, and its accessibility tree is where it can be read: a Dock item's
-`AXStatusLabel` is absent, `""` for a bare red dot, or digits for a count. That is the whole interface,
-and there is no second one to fall back to.
+`AXStatusLabel` is absent, `""` for a bare red dot, digits for a count, or a word an app chose. That is
+the whole interface, and there is no second one to fall back to.
 
 - **It is a read, never a write.** There is no `AXUIElementSetAttributeValue` and no
   `AXUIElementPerformAction` anywhere in the tree. Ping never clears a badge, never dismisses a
@@ -66,7 +67,8 @@ and there is no second one to fall back to.
   notices nothing is the worst failure available to it.
 - **The whole toolbox**, stated so that adding to it is a decision: AX reads of one process, our own
   borderless `NSWindow`s, Core Animation on layers we own, `NSWorkspace` for icons and the frontmost
-  app, and `SMAppService` for launch-at-login. No private symbol, no injection, no SIP concession, and
+  app, `SMAppService` for launch-at-login, and a Unix socket of our own that publishes the reading and
+  reads nothing back. No private symbol, no injection, no SIP concession, and
   no code in anybody else's process.
 - **What the charter costs, once.** Accessibility rules out the sandbox, which rules out the Mac App
   Store: Ping is installed and granted deliberately, by somebody who wanted it.
@@ -159,6 +161,10 @@ Five consequences, and they are the whole design:
   quietly ignores `colour` is one the user believes is broken. And a file that stops parsing changes
   **nothing** — the last good config stays on screen and the menu bar says why — because taking every
   effect off the screen as the side effect of a typo is the worst available response to one.
+- **What Ping read is yours to take elsewhere.** `ping-dot-app watch` streams the reading — every app
+  in the Dock, its badge as spelled, and what you acknowledged or snoozed — so a bar or a script can
+  show the same facts without a second reader, a second grant or a second poll. It goes out and nothing
+  comes in: the socket reads nothing a watcher writes, so it is not a second way to talk to Ping.
 - **One reader behind both surfaces.** `ping-dot-app validate` says exactly what the app itself would
   say about your file, out of the same code, and the CLI ships inside the bundle so there is only ever
   one copy of it on the machine.
@@ -175,7 +181,7 @@ Five consequences, and they are the whole design:
   remove — it is the only mechanism on offer, which is what makes the interval a first-class setting
   rather than an implementation detail.
 - **`AXStatusLabel` is a presentation string, not a model.** It is what the Dock draws, so `""` is a
-  bare dot and `"0"` is an app that drew a zero. Ping keeps it as the Dock's own string rather than
+  bare dot, `"0"` is an app that drew a zero, and `"!"` is an app that drew a word. Ping keeps it as the Dock's own string rather than
   parsing it into a number, because that is the only way the two stay distinguishable.
 - **A Dock title is a user-facing string** — localised, changeable, and unique only by convention. It is
   nevertheless the key, because it is what the person writing the config can see. `bundle-id` exists for

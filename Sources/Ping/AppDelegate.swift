@@ -2,14 +2,15 @@
 //  AppDelegate.swift
 //  Ping
 //
-//  Everything that runs: read the file, read the Dock, resolve, render. Four tasks and no
-//  observation re-arming.
+//  Everything that runs: read the file, read the Dock, resolve, render, publish. Five tasks and
+//  no observation re-arming.
 //
 
 import AppKit
 import PingConfig
 import PingCore
 import PingUI
+import PingWatch
 import ServiceManagement
 import SwiftUI
 import os
@@ -27,6 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private let notch = NotchRenderer()
   private let monitor = BadgeMonitor()
   private let loader = ConfigLoader()
+  private let watch = WatchServer()
   private var tasks: [Task<Void, Never>] = []
 
   override init() {
@@ -48,6 +50,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
           glow.render(state)
           shelf.render(state)
           notch.render(state)
+        }
+      })
+
+    // The Dock as Ping read it, for `ping-dot-app watch`. A Ping that cannot take the socket —
+    // another one holds it — still does everything else.
+    do {
+      try watch.start()
+    } catch {
+      logger.error("Not publishing the Dock: \(error)")
+    }
+    tasks.append(
+      Task { @MainActor [engine, watch] in
+        var last: DockStatus?
+        for await status in Observations({ engine.dockStatus }) {
+          guard status != last else { continue }
+          last = status
+          watch.publish(status.line)
         }
       })
 
@@ -86,6 +105,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   func applicationWillTerminate(_ notification: Notification) {
     for task in tasks { task.cancel() }
     monitor.stop()
+    watch.stop()
   }
 
   private func reloadConfig() {

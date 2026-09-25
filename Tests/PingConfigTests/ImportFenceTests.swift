@@ -41,6 +41,19 @@ struct ImportFenceTests {
     }
   }
 
+  @Test("PingWatch imports Foundation and Darwin and nothing else, so the CLI stays small")
+  func watchIsBare() throws {
+    for file in try swiftFiles(in: "PingWatch") {
+      let imports = try code(in: file)
+        .split(whereSeparator: \.isNewline)
+        .map { $0.trimmingCharacters(in: .whitespaces) }
+        .filter { $0.hasPrefix("import ") }
+      #expect(
+        Set(imports).isSubset(of: ["import Foundation", "import Darwin"]),
+        "\(file.lastPathComponent) imports \(imports)")
+    }
+  }
+
   @Test("PingCore reaches AppKit only for the accessibility and screen work")
   func coreHasNoSwiftUI() throws {
     for file in try swiftFiles(in: "PingCore") {

@@ -28,7 +28,7 @@ public struct DockItem {
   }
 
   /// The badge as the Dock spells it: `nil` for none, `""` for a bare red dot, digits for
-  /// a count. That is exactly the shape `BadgeKind` splits on.
+  /// a count, or whatever word an app chose (`"!"`, `"New"`). `Badge.kind` sorts them.
   public func badge() -> Badge? {
     var statusLabel: CFTypeRef?
     let error = AXUIElementCopyAttributeValue(
@@ -41,12 +41,7 @@ public struct DockItem {
       return nil
     }
 
-    let s = statusLabel as? String
-    if let s = s, s.allSatisfy(\.isNumber) {
-      return Badge(raw: s)
-    } else {
-      return Badge(raw: "")
-    }
+    return Badge(raw: statusLabel as? String ?? "")
   }
 }
 
@@ -59,6 +54,8 @@ public struct Badge: Equatable, Sendable {
     self.raw = raw
   }
 
-  public var kind: BadgeKind { raw.isEmpty ? .dot : .count }
+  /// A word is drawn as a bare dot: an effect's alphabet has no symbol for it, and `watch`
+  /// publishes the spelling.
+  public var kind: BadgeKind { !raw.isEmpty && raw.allSatisfy(\.isNumber) ? .count : .dot }
   public var count: Int? { Int(raw) }
 }

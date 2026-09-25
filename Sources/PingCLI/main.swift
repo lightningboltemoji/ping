@@ -9,6 +9,9 @@
 //  is enumerable, and the third consumer that keeps the table paying for itself:
 //  the window lays itself out from the same list this prints and the writer unsets from.
 //
+//  `watch` — the running app's reading of the Dock, one JSON line per change, current one
+//  first. Exit 69 (`EX_UNAVAILABLE`) when Ping is not running, 1 when it stops.
+//
 //  The binary ships as `ping-dot-app` because `ping` is /sbin/ping, but nothing here assumes
 //  that: every line it prints about itself is built from `name`, so a symlink called `ping`,
 //  or anything else, describes itself and not some other command.
@@ -16,6 +19,7 @@
 
 import Foundation
 import PingConfig
+import PingWatch
 
 /// What this binary was invoked as, which is what it should call itself. `ping-dot-app` when
 /// installed, `ping` under the symlink most people will make, and the right answer either way.
@@ -23,9 +27,9 @@ private let name =
   (CommandLine.arguments.first.map { ($0 as NSString).lastPathComponent })
   ?? "ping-dot-app"
 
-private func fail(_ message: String) -> Never {
+private func fail(_ message: String, status: Int32 = 1) -> Never {
   FileHandle.standardError.write(Data((message + "\n").utf8))
-  exit(1)
+  exit(status)
 }
 
 private func usage() -> Never {
@@ -33,11 +37,14 @@ private func usage() -> Never {
     """
     usage: \(name) validate [path]
            \(String(repeating: " ", count: name.count)) explain [key]
+           \(String(repeating: " ", count: name.count)) watch
 
       validate  Reads path (default $PING_CONFIG, else ~/.config/ping/ping.toml) and reports
                 the first problem it finds. A missing file is valid: it means every default.
       explain   Prints what a key means, what it may be set to, and what it is when the file
                 says nothing. With no key, prints every setting.
+      watch     Streams the running app's reading of the Dock as JSON, one line per change,
+                starting with the current one. Exits 69 when Ping is not running.
     """)
   exit(0)
 }
@@ -107,11 +114,22 @@ case "explain":
     explain(setting)
   }
 
+case "watch":
+  do {
+    try WatchClient.watch { line in
+      FileHandle.standardOutput.write(line + Data("\n".utf8))
+    }
+  } catch WatchError.unavailable(let path) {
+    fail("\(name): Ping is not running (nothing at \(path))", status: EX_UNAVAILABLE)
+  } catch {
+    fail("\(name): \(error)")
+  }
+
 case "-h", "--help", "help", .none:
   usage()
 
 default:
   fail(
     "\(name): unknown command '\(arguments[0])'\n"
-      + "usage: \(name) validate [path] | \(name) explain [key]")
+      + "usage: \(name) validate [path] | \(name) explain [key] | \(name) watch")
 }

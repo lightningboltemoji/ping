@@ -49,6 +49,20 @@ glow.size
 
 Settings can also be changed via GUI using `Settings` in the menu bar.
 
+## Watch
+
+Ping's reading of the Dock is available to anything else that wants to show it, like a status bar or a
+script. `watch` prints it as JSON, one line per change, starting with the current one:
+
+```
+$ ping-dot-app watch
+{"apps":[{"acknowledged":false,"badge":"3","count":3,"name":"Slack","path":"/Applications/Slack.app"}, …],"snoozed":false,"version":1}
+```
+
+Every app in the Dock is listed, badged or not. `badge` is exactly what the Dock shows (`null` for none,
+`""` for a bare dot), `count` is set when that is a number, and `acknowledged` and `snoozed` are what
+you told Ping from the menu bar. `watch` exits 69 when Ping isn't running.
+
 ## Install
 
 [Homebrew](https://brew.sh) is recommended:

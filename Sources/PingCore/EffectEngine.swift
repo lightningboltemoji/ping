@@ -44,6 +44,11 @@ public final class EffectEngine {
       config: effectiveConfig, snapshot: snapshot, runtime: runtime, now: Date())
   }
 
+  /// What `watch` publishes, which the config has no say in.
+  public var dockStatus: DockStatus {
+    DockStatus(snapshot: snapshot, runtime: runtime, now: Date())
+  }
+
   // MARK: - Input
 
   /// Fold in a fresh reading of the Dock, ageing the acknowledgements along with it.
