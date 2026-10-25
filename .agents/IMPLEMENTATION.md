@@ -629,9 +629,9 @@ into `/Applications`, or `INSTALL_DIR`) · `make dist` · `make lint`.
 - **The git tag is the only version authority.** No file in the tree carries a number; `make app` asks
   `git describe` and stamps the answer into the bundle's _copy_ of `Info.plist`.
 - **The icon needs Xcode, not the Command Line Tools** — `actool` lives in the former. A machine without
-  it builds a bundle with no icon and says so, rather than failing. The bell is black, for 17:1 against
-  the green in the appearance most people see, and that costs the other two: macOS builds the tinted and
-  clear variants from the layer's luminance, so a dark glyph comes back a faint emboss. It also means
-  `icon.json` has to state its `dark` fill — left out, the system darkens the ground under a black bell.
+  it builds a bundle with no icon and says so, rather than failing. The bell is black on lime, 16:1, and
+  recoloured per appearance by the layer's own `fill-specializations`: lime on `system-dark` in Dark, and
+  white under `tinted`, which covers Clear and Tinted. macOS builds those two from the layer's luminance,
+  so a black bell left as it is comes back a faint emboss.
 - Archives are `ditto -c -k --keepParent`, never `zip`, which mangles symlinks, xattrs and the
   signature. Builds are arm64 only; the platform floor is macOS 26.
