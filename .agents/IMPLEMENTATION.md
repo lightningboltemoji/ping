@@ -622,10 +622,11 @@ into `/Applications`, or `INSTALL_DIR`) · `make dist` · `make lint`.
   them looks only beside the executable, which inside a bundle is `Contents/MacOS`.
 - **`LSUIElement`** — Ping is a menu bar agent with no Dock tile of its own. Launch-at-login is
   `SMAppService.mainApp`, and the file wins on load: the config is read and the service is synced to it.
-- **TCC records a grant against the code signature of what runs.** Ad-hoc signing identifies the app by
-  cdhash, which changes with every build, so macOS re-asks for Accessibility on every rebuild until a
-  Developer ID signature (`CODESIGN_IDENTITY`) replaces it. The nested CLI is signed **before** the app,
-  because signing a bundle seals its `Contents`.
+- **TCC records a grant against the code signature of what runs.** Builds and releases are signed with
+  the self-signed `Ping` certificate (see the Makefile), so the Accessibility grant carries across
+  `make install` and updates, and between a local build and a CI one. An ad-hoc build, the fallback on
+  a machine without the certificate, is re-asked every time. A real identity also turns on the hardened
+  runtime. The nested CLI is signed **before** the app, because signing a bundle seals its `Contents`.
 - **The git tag is the only version authority.** No file in the tree carries a number; `make app` asks
   `git describe` and stamps the answer into the bundle's _copy_ of `Info.plist`.
 - **The icon needs Xcode, not the Command Line Tools** — `actool` lives in the former. A machine without

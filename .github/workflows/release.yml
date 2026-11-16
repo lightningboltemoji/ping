@@ -31,7 +31,8 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       # Read once here so the signing steps can gate on `env.X != ''`. Absent, the build still
-      # publishes — ad-hoc signed and not notarized.
+      # publishes — ad-hoc signed and not notarized. The certificate is the self-signed `Ping` one,
+      # as local builds use; it can't be notarized, so APPLE_* stay unset.
       MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
       MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
       MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
@@ -84,7 +85,7 @@ jobs:
       - name: Test
         run: make test
 
-      - name: Import the Developer ID certificate
+      - name: Import the signing certificate
         if: env.MACOS_CERTIFICATE != ''
         run: |
           set -euo pipefail
@@ -124,7 +125,7 @@ jobs:
           set -euo pipefail
           codesign --verify --deep --strict --verbose=2 Ping.app
           spctl --assess --type execute --verbose Ping.app || \
-            echo "::warning::Gatekeeper rejects this build — it is ad-hoc signed and not notarized."
+            echo "::warning::Gatekeeper rejects this build — it is not notarized."
 
       # Force-move the tag and edit in place; recreating the release would notify every releases
       # watcher on every push to main.

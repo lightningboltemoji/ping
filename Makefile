@@ -18,14 +18,22 @@ BUILD        ?= $(shell git rev-list --count HEAD 2>/dev/null || echo 0)
 print-version:
 	@echo $(VERSION)
 
-# Ad-hoc signing runs locally but re-asks for Accessibility on every build; a Developer ID in
-# CODESIGN_IDENTITY holds the grant, and brings the two flags notarization requires with it
-# (IMPLEMENTATION.md §14).
-CODESIGN_IDENTITY ?= -
+# Signed with the self-signed `Ping` certificate when the login keychain has it, so the Accessibility
+# grant survives a rebuild; ad hoc, the fallback, loses it every time. CI names the same certificate
+# explicitly, which adds a secure timestamp (IMPLEMENTATION.md §14).
+ifeq ($(origin CODESIGN_IDENTITY),undefined)
+  # By hash, since codesign matches a name as a substring.
+  PING_CERT         := $(shell security find-identity -p codesigning 2>/dev/null | awk '/"Ping"/ { print $$2; exit }')
+  CODESIGN_IDENTITY := $(or $(PING_CERT),-)
+  TIMESTAMP         := --timestamp=none
+else
+  TIMESTAMP         := --timestamp
+endif
+
 ifeq ($(CODESIGN_IDENTITY),-)
   SIGN_FLAGS :=
 else
-  SIGN_FLAGS := --options runtime --timestamp
+  SIGN_FLAGS := --options runtime $(TIMESTAMP)
 endif
 
 # `actool` lives in Xcode, not the Command Line Tools, so a machine without it gets a bundle with no
