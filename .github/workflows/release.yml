@@ -182,6 +182,8 @@ jobs:
           dir="$(brew --repository)/Library/Taps/lightningboltemoji/homebrew-tap"
           git clone "https://x-access-token:$TAP_TOKEN@github.com/lightningboltemoji/homebrew-tap.git" "$dir"
 
+          brew trust --tap lightningboltemoji/tap
+
           # The commit is the app's, so it is authored as the app: its bot account's numeric id is
           # what makes the noreply address resolve to that identity rather than to nobody. The
           # address is still valid without it, and an unattributed commit is not worth failing a
